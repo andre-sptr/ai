@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       return new Response("API Key not found", { status: 500 });
     }
 
-    const { messages } = await req.json();
+    const { messages, model } = await req.json();
 
     const formattedMessages = messages.map((m: any) => {
       if (m.role === 'user' && m.imageUrl) {
@@ -59,8 +59,10 @@ export async function POST(req: Request) {
       };
     });
 
+    const selectedModel = model || 'gemini-2.5-flash';
+
     const result = streamText({
-      model: google('gemini-2.5-flash'), 
+      model: google(selectedModel), 
       messages: formattedMessages,
       system: SYSTEM_PROMPT,
     });

@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle } from 'lucide-react'
+import { Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 
@@ -24,6 +24,7 @@ const extractCodeText = (children: any): string => {
 }
 
 const PreviewFrame = ({ code }: { code: string }) => {
+  const isDark = document.documentElement.classList.contains('dark')
   const srcDoc = `
     <!DOCTYPE html>
     <html>
@@ -33,7 +34,6 @@ const PreviewFrame = ({ code }: { code: string }) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <style>
           body { color: white; }
-          /* Custom scrollbar agar sesuai dengan tema */
           ::-webkit-scrollbar { width: 6px; }
           ::-webkit-scrollbar-track { background: transparent; }
           ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
@@ -44,7 +44,6 @@ const PreviewFrame = ({ code }: { code: string }) => {
       </body>
     </html>
   `
-
   return (
     <iframe
       srcDoc={srcDoc}
@@ -63,6 +62,7 @@ const CodeBlock = ({ children, className, ...props }: any) => {
   const match = /language-(\w+)/.exec(className || '')
   const language = match ? match[1] : ''
   const isPreviewable = ['html', 'xml', 'jsx', 'tsx'].includes(language)
+  const isDark = document.documentElement.classList.contains('dark')
 
   const handleCopy = async () => {
     try {
@@ -133,23 +133,119 @@ export default function Home() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
+  const [showModelDropdown, setShowModelDropdown] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const models = [
+    // --- Gemini 3.0 (Next-Gen Preview) ---
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: 'Reasoning & Agentic Paling Canggih' },
+    { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro (Image)', desc: 'Generasi Gambar & Teks High-Fidelity' },
+    // --- Gemini 2.5 (Current High-End) ---
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Reasoning Kompleks & Coding' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Cepat & Cerdas (Recommended)' },
+    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash (Image)', desc: 'Pembuatan & Edit Aset Visual' },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', desc: 'Ringan & Hemat Biaya' },
+    // --- Gemini 2.0 (Stable) ---
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Versi Stabil Sebelumnya' },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', desc: 'Efisien untuk Tugas Sederhana' },
+    // --- Alias / Versi Terbaru Otomatis ---
+    { id: 'gemini-flash-latest', name: 'Gemini Flash', desc: 'Versi Flash Paling Baru' },
+    { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite', desc: 'Versi Lite Paling Baru' },
+    // --- Media Generation (Imagen & Veo) ---
+    { id: 'imagen-4.0-generate-001', name: 'Imagen 4.0 (Image)', desc: 'Generasi Gambar Kualitas Tinggi' },
+    { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4.0 Ultra (Image)', desc: 'Detail Gambar Ultra Realistis' },
+    { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4.0 Fast (Image)', desc: 'Generasi Gambar Cepat' },
+    { id: 'veo-2.0-generate-001', name: 'Veo 2.0 (Video)', desc: 'Generasi Video Sinematik' },
+    // --- Specialized ---
+    { id: 'gemini-robotics-er-1.5-preview', name: 'Gemini Robotics 1.5', desc: 'Model Eksperimental Robotika' },
+  ]
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const initialTheme = savedTheme || 'dark';
+    setTheme(initialTheme);
+    
+    if (initialTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+
+    return () => {
+      window.speechSynthesis.cancel()
+    }
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prevTheme => (prevTheme === 'dark' ? 'light' : 'dark'));
+  };
+
+  useEffect(() => {
     scrollToBottom()
   }, [messages])
 
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel()
+    }
+  }, [])
+
   const handleClearChat = () => {
+    window.speechSynthesis.cancel()
+    setSpeakingId(null)
     setMessages([])
     setInput('')
     setSelectedImage(null)
     setEditingIndex(null)
+  }
+
+  const handleSpeak = (text: string, id: string) => {
+    if (!('speechSynthesis' in window)) {
+      alert("Browser Anda tidak mendukung fitur suara.")
+      return
+    }
+
+    if (speakingId === id) {
+      window.speechSynthesis.cancel()
+      setSpeakingId(null)
+      return
+    }
+
+    window.speechSynthesis.cancel()
+
+    const cleanText = text
+      .replace(/```[\s\S]*?```/g, "Kode program.") 
+      .replace(/[#*`_]/g, "") 
+
+    const utterance = new SpeechSynthesisUtterance(cleanText)
+    
+    utterance.lang = 'id-ID' 
+    utterance.rate = 1.0
+    utterance.pitch = 1.0
+
+    utterance.onend = () => setSpeakingId(null)
+    utterance.onerror = () => setSpeakingId(null)
+
+    setSpeakingId(id)
+    window.speechSynthesis.speak(utterance)
   }
 
   const handleCopyContent = async (text: string, messageId: string) => {
@@ -211,12 +307,17 @@ export default function Home() {
 
   const generateResponse = async (currentMessages: Message[]) => {
     setIsLoading(true)
+    window.speechSynthesis.cancel() 
+    setSpeakingId(null)
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: currentMessages }),
+        body: JSON.stringify({ 
+          messages: currentMessages,
+          model: selectedModel
+        }),
       })
 
       if (!response.ok) throw new Error("Gagal menghubungi AI")
@@ -317,14 +418,109 @@ export default function Home() {
   }
 
   const lastUserMessageIndex = messages.map(m => m.role).lastIndexOf('user')
+  const isDark = theme === 'dark'
 
   return (
-    <main className="relative min-h-screen bg-slate-950 text-white selection:bg-cyan-500/30 overflow-hidden font-sans flex flex-col">
+    <main className={`relative min-h-screen selection:bg-cyan-500/30 overflow-hidden font-sans flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-800'}`}>
       
       <div className="absolute inset-0 z-0 pointer-events-none fixed">
-        <div className="absolute inset-0 bg-grid-white/[0.02] bg-[size:50px_50px]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80" />
+        <div className={`absolute inset-0 ${isDark ? 'bg-grid-white' : 'bg-grid-black'} bg-[size:50px_50px]`} />
+        <div className={`absolute inset-0 ${isDark ? 'bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80' : 'bg-gradient-to-t from-slate-100 via-slate-100/50 to-slate-100/80'}`} />
       </div>
+
+      <header className={`sticky top-0 z-30 flex items-center justify-between px-4 py-3 border-b shadow-sm transition-colors duration-300 
+        ${isDark 
+          ? 'bg-slate-950/80 backdrop-blur-md border-white/5' 
+          : 'bg-slate-100/80 backdrop-blur-md border-slate-200'
+        }`}
+      >
+        
+        <div className="flex items-center gap-3">
+          <img src="/favicon.ico" alt="Logo" className="w-8 h-8" />
+          <span className={`font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500`}>
+            Reka AI
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3">
+            <button
+                onClick={toggleTheme}
+                className={`p-2 rounded-full transition-colors 
+                  ${isDark 
+                    ? 'text-cyan-400 hover:bg-slate-800' 
+                    : 'text-slate-600 hover:bg-slate-200'
+                  }`}
+                title={isDark ? "Ganti ke Light Mode" : "Ganti ke Dark Mode"}
+            >
+                {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            
+            <div className="relative">
+                <button
+                    onClick={() => setShowModelDropdown(!showModelDropdown)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-xs sm:text-sm
+                        ${isDark 
+                          ? 'bg-slate-900 border-white/10 hover:border-cyan-500/50 text-slate-300' 
+                          : 'bg-white border-slate-300 hover:border-cyan-500/50 text-slate-700'
+                        }`}
+                >
+                    <span className="truncate max-w-[150px]">
+                      {models.find(m => m.id === selectedModel)?.name}
+                    </span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showModelDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showModelDropdown && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowModelDropdown(false)}
+                    />
+                    
+                    <div className={`absolute right-0 top-full mt-2 w-72 backdrop-blur-xl border rounded-xl shadow-2xl overflow-hidden z-50 flex flex-col 
+                      ${isDark 
+                        ? 'bg-slate-900/95 border-white/10' 
+                        : 'bg-white/95 border-slate-300'
+                      }`}
+                    >
+                      <div className={`px-4 py-3 border-b ${isDark ? 'border-white/5 bg-white/5' : 'border-slate-300/50 bg-slate-100'}`}>
+                        <span className={`text-xs font-semibold uppercase tracking-wider ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}>
+                          Pilih Model AI
+                        </span>
+                      </div>
+
+                      <div className="p-1.5 max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-cyan-500/20 scrollbar-track-transparent">
+                        {models.map((model) => (
+                          <button
+                            key={model.id}
+                            onClick={() => {
+                              setSelectedModel(model.id)
+                              setShowModelDropdown(false)
+                            }}
+                            className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-200 flex flex-col gap-0.5 group ${
+                              selectedModel === model.id 
+                                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 shadow-sm' 
+                                : isDark 
+                                  ? 'text-slate-400 hover:bg-white/5 hover:text-slate-200 border border-transparent'
+                                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className={`font-medium truncate ${selectedModel === model.id ? 'text-cyan-300' : isDark ? 'text-slate-200 group-hover:text-white' : 'text-slate-900 group-hover:text-slate-900'}`}>
+                                {model.name}
+                              </span>
+                              {selectedModel === model.id && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+                            </div>
+                            <span className={`text-xs opacity-70 line-clamp-1 ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>{model.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+            </div>
+        </div>
+      </header>
 
       <div className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-10 pb-40">
         <div className="max-w-3xl mx-auto space-y-8">
@@ -369,32 +565,41 @@ export default function Home() {
                 )}
 
                 <div className={`relative max-w-[85%] rounded-2xl p-4 shadow-xl backdrop-blur-sm border 
-                  ${editingIndex === index ? 'ring-2 ring-cyan-500/50 border-cyan-500/30 bg-slate-800' : ''} 
-                  ${msg.role === 'user' ? 'bg-slate-800/80 border-slate-700 text-slate-100 rounded-br-none' : 'bg-slate-950/50 border-white/10 text-slate-300 rounded-bl-none prose-headings:text-cyan-200 prose-strong:text-cyan-400'}`}>
-                  
-                  {msg.role === 'user' && msg.imageUrl && (
-                    <div className="mb-3 rounded-lg overflow-hidden border border-slate-600/50">
-                      <img 
-                        src={msg.imageUrl} 
-                        alt="Uploaded content" 
-                        className="max-w-full h-auto max-h-64 object-cover"
-                      />
-                    </div>
-                  )}
+                  ${editingIndex === index 
+                      ? isDark 
+                          ? 'ring-2 ring-cyan-500/50 border-cyan-500/30 bg-slate-800' 
+                          : 'ring-2 ring-cyan-600/60 border-cyan-600/60 bg-slate-200' 
+                      : ''
+                  } 
+                  ${msg.role === 'user' 
+                    ? isDark 
+                        ? 'bg-slate-800/80 border-slate-700 text-slate-100 rounded-br-none' 
+                        : 'bg-slate-200 border-slate-400 text-slate-900 rounded-br-none' 
+                    : isDark 
+                        ? 'bg-slate-950/50 border-white/10 text-slate-300 rounded-bl-none prose-headings:text-cyan-200 prose-strong:text-cyan-400' 
+                        : 'bg-white border-slate-400 text-slate-900 rounded-bl-none prose-headings:text-cyan-700 prose-strong:text-cyan-600'
+                  }`}
+                >
 
-                  <div className="prose prose-invert max-w-none text-sm md:text-base leading-relaxed">
+                  <div className={`prose max-w-none text-sm md:text-base leading-relaxed ${isDark ? 'prose-invert' : 'prose-slate'}`}>
                     <ReactMarkdown 
                       rehypePlugins={[rehypeHighlight]}
                       components={{
                         pre: ({ children }) => <>{children}</>, 
                         code: ({ node, className, children, ...props }) => {
                           const match = /language-(\w+)/.exec(className || '')
-                          return match ? (
-                            <CodeBlock className={className} {...props}>
-                              {children}
-                            </CodeBlock>
-                          ) : (
-                            <code className={`${className} bg-slate-800 px-1.5 py-0.5 rounded text-cyan-200 font-mono text-sm`} {...props}>
+                          const isCodeBlock = !!match;
+                          
+                          if (isCodeBlock) {
+                            return (
+                              <CodeBlock className={className} {...props}>
+                                {children}
+                              </CodeBlock>
+                            )
+                          }
+                          
+                          return (
+                            <code className={`${className} px-1.5 py-0.5 rounded font-mono text-sm ${isDark ? 'bg-slate-800 text-cyan-200' : 'bg-slate-300 text-cyan-800'}`} {...props}>
                               {children}
                             </code>
                           )
@@ -406,12 +611,81 @@ export default function Home() {
                   </div>
 
                   {msg.role === 'assistant' && !isLoading && (
-                     <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-4">
+                     <div className={`mt-3 pt-3 flex flex-wrap items-center gap-4 ${isDark ? 'border-t border-white/10' : 'border-t border-slate-400'}`}>
+                      
+                        <button 
+                           onClick={() => handleSpeak(msg.content, msg.id)}
+                           className={`flex items-center gap-1.5 text-xs transition-colors ${speakingId === msg.id 
+                              ? 'text-cyan-600 animate-pulse'
+                              : isDark 
+                                  ? 'text-slate-400 hover:text-white'
+                                  : 'text-slate-600 hover:text-slate-900' 
+                           }`}
+                           title={speakingId === msg.id ? "Berhenti bicara" : "Bacakan respon"}
+                        >
+                           {speakingId === msg.id ? (
+                             <>
+                               <StopCircle className="w-3.5 h-3.5" />
+                               <span>Stop</span>
+                             </>
+                           ) : (
+                             <>
+                               <Volume2 className="w-3.5 h-3.5" />
+                               <span>Baca</span>
+                             </>
+                           )}
+                        </button>
+
                         <button 
                            onClick={() => handleCopyContent(msg.content, msg.id)}
-                           className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
-                           title="Salin seluruh respon"
+                           className={`flex items-center gap-1.5 text-xs transition-colors 
+                           ${isDark 
+                              ? 'text-slate-400 hover:text-white' 
+                              : 'text-slate-600 hover:text-slate-900' 
+                           }`}
+                           title="Salin respon"
                         >
+                           {copiedMessageId === msg.id ? (
+                             <>
+                               <Check className="w-3.5 h-3.5 text-green-400" />
+                               <span className="text-green-400">Disalin</span>
+                             </>
+                           ) : (
+                             <>
+                               <Copy className="w-3.5 h-3.5" />
+                               <span>Salin</span>
+                             </>
+                           )}
+                        </button>
+
+                        {index === messages.length - 1 && (
+                          <button 
+                             onClick={handleRegenerate}
+                             className={`flex items-center gap-1.5 text-xs transition-colors 
+                             ${isDark 
+                                ? 'text-slate-400 hover:text-white' 
+                                : 'text-slate-600 hover:text-slate-900' 
+                             }`}
+                             title="Ulangi respon"
+                          >
+                             <RotateCw className="w-3.5 h-3.5" />
+                             <span>Ulangi</span>
+                          </button>
+                        )}
+                     </div>
+                  )}
+
+                  {msg.role === 'user' && !isLoading && (
+                    <div className={`mt-2 pt-2 flex items-center justify-end gap-4 ${isDark ? 'border-t border-slate-700/50' : 'border-t border-slate-400'}`}>
+                       <button
+                           onClick={() => handleCopyContent(msg.content, msg.id)}
+                           className={`flex items-center gap-1.5 text-xs transition-colors 
+                           ${isDark 
+                              ? 'text-slate-400 hover:text-white' 
+                              : 'text-slate-600 hover:text-slate-900'
+                           }`}
+                           title="Salin pesan"
+                       >
                            {copiedMessageId === msg.id ? (
                              <>
                                <Check className="w-3 h-3 text-green-400" />
@@ -423,32 +697,25 @@ export default function Home() {
                                <span>Salin</span>
                              </>
                            )}
-                        </button>
+                       </button>
 
-                        {index === messages.length - 1 && (
-                          <button 
-                             onClick={handleRegenerate}
-                             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition-colors"
-                          >
-                             <RotateCw className="w-3 h-3" />
-                             <span>Ulangi</span>
-                          </button>
-                        )}
-                     </div>
-                  )}
-
-                  {msg.role === 'user' && index === lastUserMessageIndex && !isLoading && (
-                    <div className="mt-2 pt-2 border-t border-slate-700/50 flex justify-end">
-                       {editingIndex === index ? (
-                         <span className="text-xs text-cyan-400 italic animate-pulse">Sedang mengedit...</span>
-                       ) : (
-                         <button
-                           onClick={() => handleEditMessage(index)}
-                           className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition-colors"
-                         >
-                           <Pencil className="w-3 h-3" />
-                           <span>Edit</span>
-                         </button>
+                       {index === lastUserMessageIndex && (
+                           editingIndex === index ? (
+                             <span className="text-xs text-cyan-400 italic animate-pulse">Sedang mengedit...</span>
+                           ) : (
+                             <button
+                               onClick={() => handleEditMessage(index)}
+                               className={`flex items-center gap-1.5 text-xs transition-colors 
+                               ${isDark 
+                                  ? 'text-slate-400 hover:text-white' 
+                                  : 'text-slate-600 hover:text-slate-900'
+                               }`}
+                               title="Edit pesan"
+                             >
+                               <Pencil className="w-3 h-3" />
+                               <span>Edit</span>
+                             </button>
+                           )
                        )}
                     </div>
                   )}
@@ -456,7 +723,7 @@ export default function Home() {
                 </div>
 
                 {msg.role === 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-slate-700 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
                     <User className="w-4 h-4 text-slate-300" />
                   </div>
                 )}
@@ -486,8 +753,8 @@ export default function Home() {
       <div className="relative z-20 p-4 sm:p-6 lg:p-8 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent">
         <div className="max-w-3xl mx-auto relative group">
           {messages.length > 0 && (
-            <button onClick={handleClearChat} className="absolute -top-12 right-0 text-xs flex items-center text-slate-500 hover:text-red-400 transition-colors">
-              <Trash2 className="w-3 h-3 mr-1" /> Reset Chat
+            <button onClick={handleClearChat} className="absolute -top-12 right-0 text-xs flex items-center text-slate-500 hover:text-red-400 transition-colors" title="Reset chat">
+              <Trash2 className="w-3 h-3 mr-1" /> Reset
             </button>
           )}
 
