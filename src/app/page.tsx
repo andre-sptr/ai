@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Sparkles, Wand2, Zap, ArrowRight, User, Trash2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
 
 type Message = {
   id: string;
@@ -117,7 +118,7 @@ export default function Home() {
             >
               <div className="inline-flex items-center justify-center px-3 py-1 mb-4 border border-cyan-500/30 rounded-full bg-cyan-950/30 backdrop-blur-sm">
                 <Zap className="w-3 h-3 text-cyan-400 mr-2" />
-                <span className="text-xs font-medium text-cyan-300 tracking-wide uppercase">Realtime Streaming</span>
+                <span className="text-xs font-medium text-cyan-300 tracking-wide uppercase">Realtime</span>
               </div>
               <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-4">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500">
@@ -146,7 +147,7 @@ export default function Home() {
 
                 <div className={`relative max-w-[85%] rounded-2xl p-4 shadow-xl backdrop-blur-sm border ${msg.role === 'user' ? 'bg-slate-800/80 border-slate-700 text-slate-100 rounded-br-none' : 'bg-slate-950/50 border-white/10 text-slate-300 rounded-bl-none prose-headings:text-cyan-200 prose-strong:text-cyan-400'}`}>
                   <div className="prose prose-invert max-w-none text-sm md:text-base leading-relaxed">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown rehypePlugins={[rehypeHighlight]}>{msg.content}</ReactMarkdown>
                   </div>
                 </div>
 

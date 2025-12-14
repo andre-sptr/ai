@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model: google('gemini-2.5-flash'),
       messages,
+      system: "Kamu adalah asisten coding yang ahli. Jawablah dengan singkat dan berikan contoh kode.",
     });
 
     console.log("✅ Berhasil terhubung ke Google AI, mulai streaming...");
