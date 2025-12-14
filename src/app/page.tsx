@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sparkles, Wand2, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle } from 'lucide-react'
+import { Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 
@@ -13,47 +13,114 @@ type Message = {
   imageUrl?: string;
 }
 
-const CodeBlock = ({ children, ...props }: any) => {
+const extractCodeText = (children: any): string => {
+  if (typeof children === 'string') return children
+  if (typeof children === 'number') return String(children)
+  if (Array.isArray(children)) return children.map(extractCodeText).join('')
+  if (children && typeof children === 'object' && 'props' in children) {
+    return extractCodeText(children.props.children)
+  }
+  return ''
+}
+
+const PreviewFrame = ({ code }: { code: string }) => {
+  const srcDoc = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+          body { color: white; }
+          /* Custom scrollbar agar sesuai dengan tema */
+          ::-webkit-scrollbar { width: 6px; }
+          ::-webkit-scrollbar-track { background: transparent; }
+          ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        </style>
+      </head>
+      <body class="p-4">
+        ${code}
+      </body>
+    </html>
+  `
+
+  return (
+    <iframe
+      srcDoc={srcDoc}
+      title="Preview"
+      className="w-full h-full min-h-[400px] bg-white/5 rounded-b-lg"
+      sandbox="allow-scripts"
+    />
+  )
+}
+
+const CodeBlock = ({ children, className, ...props }: any) => {
   const [isCopied, setIsCopied] = useState(false)
+  const [view, setView] = useState<'code' | 'preview'>('code')
   const preRef = useRef<HTMLPreElement>(null)
+  const codeContent = extractCodeText(children).replace(/\n$/, '')
+  const match = /language-(\w+)/.exec(className || '')
+  const language = match ? match[1] : ''
+  const isPreviewable = ['html', 'xml', 'jsx', 'tsx'].includes(language)
 
   const handleCopy = async () => {
-    if (preRef.current) {
-      const codeText = preRef.current.innerText
-      try {
-        await navigator.clipboard.writeText(codeText)
-        setIsCopied(true)
-        setTimeout(() => setIsCopied(false), 2000)
-      } catch (err) {
-        console.error('Gagal menyalin:', err)
-      }
+    try {
+      await navigator.clipboard.writeText(codeContent)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (err) {
+      console.error('Gagal menyalin:', err)
     }
   }
 
   return (
-    <div className="relative group my-4 rounded-lg overflow-hidden border border-slate-700">
-      <div className="absolute right-2 top-2 flex items-center justify-end">
+    <div className="relative group my-6 rounded-xl overflow-hidden border border-slate-700 bg-[#0d1117] shadow-2xl">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-800/50 border-b border-slate-700 backdrop-blur-sm">
+        {isPreviewable ? (
+          <div className="flex bg-slate-900/50 p-1 rounded-lg border border-slate-700/50">
+            <button
+              onClick={() => setView('code')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                view === 'code' ? 'bg-cyan-500/20 text-cyan-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Code
+            </button>
+            <button
+              onClick={() => setView('preview')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                view === 'preview' ? 'bg-cyan-500/20 text-cyan-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3 h-3" />
+              Preview
+            </button>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-500 font-mono uppercase tracking-wider">
+            {language || 'text'}
+          </span>
+        )}
+
         <button
           onClick={handleCopy}
-          className="p-1.5 rounded-md bg-slate-800/50 hover:bg-slate-700 transition-colors border border-transparent hover:border-slate-600"
-          title="Salin kode"
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-700 text-slate-400 hover:text-white transition-colors text-xs"
         >
-          {isCopied ? (
-            <div className="flex items-center gap-1 text-green-400">
-              <Check className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">Disalin!</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-slate-400 group-hover:text-slate-200">
-              <Copy className="w-3.5 h-3.5" />
-              <span className="text-[10px] font-medium">Copy</span>
-            </div>
-          )}
+          {isCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{isCopied ? 'Disalin' : 'Salin'}</span>
         </button>
       </div>
-      <pre ref={preRef} {...props} className="bg-[#0d1117] p-4 pt-10 overflow-x-auto text-sm font-mono">
-        {children}
-      </pre>
+
+      <div className="relative">
+        {view === 'code' ? (
+          <pre ref={preRef} {...props} className="p-4 overflow-x-auto text-sm font-mono leading-relaxed">
+            {children}
+          </pre>
+        ) : (
+          <PreviewFrame code={codeContent} />
+        )}
+      </div>
     </div>
   )
 }
@@ -274,11 +341,11 @@ export default function Home() {
               </div>
               <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-4">
                 <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500">
-                  Chat With Context
+                  Reka AI
                 </span>
               </h1>
               <p className="text-slate-400 text-lg">
-                Mulai percakapan. AI akan merespons secara realtime.
+                Mulai percakapan dengan Reka. Ubah ide menjadi kode secara realtime.
               </p>
             </motion.div>
           )}
@@ -293,7 +360,11 @@ export default function Home() {
               >
                 {msg.role !== 'user' && (
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
-                    <Wand2 className="w-4 h-4 text-white" />
+                    <img
+                      src="/favicon.ico"
+                      alt="Logo Reka"
+                      className="w-7.5 h-7.5"
+                    />
                   </div>
                 )}
 
@@ -315,12 +386,19 @@ export default function Home() {
                     <ReactMarkdown 
                       rehypePlugins={[rehypeHighlight]}
                       components={{
-                        pre: ({ node, ...props }) => (
-                          <CodeBlock {...props} />
-                        ),
-                        code: ({ node, ...props }) => (
-                          <code {...props} className="font-mono text-sm" />
-                        )
+                        pre: ({ children }) => <>{children}</>, 
+                        code: ({ node, className, children, ...props }) => {
+                          const match = /language-(\w+)/.exec(className || '')
+                          return match ? (
+                            <CodeBlock className={className} {...props}>
+                              {children}
+                            </CodeBlock>
+                          ) : (
+                            <code className={`${className} bg-slate-800 px-1.5 py-0.5 rounded text-cyan-200 font-mono text-sm`} {...props}>
+                              {children}
+                            </code>
+                          )
+                        }
                       }}
                     >
                       {msg.content}
@@ -389,7 +467,11 @@ export default function Home() {
           {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4 justify-start">
                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
-                  <Sparkles className="w-4 h-4 text-white animate-spin" />
+                  <img
+                    src="/favicon.ico"
+                    alt="Logo Reka"
+                    className="w-7.5 h-7.5 animate-spin"
+                  />
                </div>
                <div className="bg-slate-950/50 border border-white/10 rounded-2xl rounded-bl-none p-4 flex items-center gap-2">
                  <span className="text-sm text-slate-400">Menunggu respon...</span>
@@ -464,7 +546,7 @@ export default function Home() {
                 onKeyDown={handleKeyDown}
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
-                placeholder={selectedImage ? "Tambahkan pesan untuk gambar ini..." : "Kirim pesan... (Enter untuk kirim)"}
+                placeholder={selectedImage ? "Tambahkan pesan untuk gambar ini..." : "Kirim pesan..."}
                 className="w-full max-h-32 bg-transparent text-white placeholder-slate-500 text-base resize-none focus:outline-none p-3 scrollbar-thin scrollbar-thumb-cyan-500/20 scrollbar-track-transparent"
                 rows={1}
                 style={{ minHeight: '50px' }}
@@ -481,7 +563,7 @@ export default function Home() {
           </form>
           
           <p className="text-center text-xs text-slate-600 mt-2">
-            AI dapat membuat kesalahan. Periksa info penting.
+            &copy; {new Date().getFullYear()} Andre Saputra
           </p>
         </div>
       </div>
