@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown } from 'lucide-react'
+import { Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 
@@ -11,6 +11,8 @@ type Message = {
   role: 'user' | 'assistant';
   content: string;
   imageUrl?: string;
+  videoUrl?: string;
+  videoOp?: string;
 }
 
 const extractCodeText = (children: any): string => {
@@ -141,27 +143,49 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  type LightboxState =
+  | { kind: 'image' | 'video'; src: string; filename: string }
+  | null
+
+  const [lightbox, setLightbox] = useState<LightboxState>(null)
+
+  useEffect(() => {
+    if (!lightbox) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [lightbox])
+
   const models = [
-    // --- Gemini 3.0 (Next-Gen Preview) ---
     { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: 'Reasoning & Agentic Paling Canggih' },
     { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro (Image)', desc: 'Generasi Gambar & Teks High-Fidelity' },
-    // --- Gemini 2.5 (Current High-End) ---
+
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Reasoning Kompleks & Coding' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Cepat & Cerdas (Recommended)' },
     { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash (Image)', desc: 'Pembuatan & Edit Aset Visual' },
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', desc: 'Ringan & Hemat Biaya' },
-    // --- Gemini 2.0 (Stable) ---
+
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Versi Stabil Sebelumnya' },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', desc: 'Efisien untuk Tugas Sederhana' },
-    // --- Alias / Versi Terbaru Otomatis ---
+
     { id: 'gemini-flash-latest', name: 'Gemini Flash', desc: 'Versi Flash Paling Baru' },
     { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite', desc: 'Versi Lite Paling Baru' },
-    // --- Media Generation (Imagen & Veo) ---
+
     { id: 'imagen-4.0-generate-001', name: 'Imagen 4.0 (Image)', desc: 'Generasi Gambar Kualitas Tinggi' },
     { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4.0 Ultra (Image)', desc: 'Detail Gambar Ultra Realistis' },
     { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4.0 Fast (Image)', desc: 'Generasi Gambar Cepat' },
     { id: 'veo-2.0-generate-001', name: 'Veo 2.0 (Video)', desc: 'Generasi Video Sinematik' },
-    // --- Specialized ---
+
     { id: 'gemini-robotics-er-1.5-preview', name: 'Gemini Robotics 1.5', desc: 'Model Eksperimental Robotika' },
   ]
 
@@ -305,30 +329,100 @@ export default function Home() {
     setSelectedImage(null)
   }
 
+  const pollVideo = async (op: string, assistantId: string) => {
+    while (true) {
+      await new Promise(r => setTimeout(r, 10000))
+
+      const r = await fetch(`/api/video/status?op=${encodeURIComponent(op)}`)
+      const j = await r.json()
+
+      if (!j.done) continue
+
+      if (j.videoUrl) {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId
+          ? {
+              ...m,
+              videoUrl: j.videoUrl,
+              videoOp: undefined,
+              content: '🎬 Video sudah selesai dibuat',
+            }
+          : m
+        ))
+      } else {
+        setMessages(prev => prev.map(m =>
+          m.id === assistantId
+            ? { ...m, content: (m.content || '') + '\n\n❌ Gagal membuat video.', videoOp: undefined }
+            : m
+        ))
+      }
+      break
+    }
+  }
+
   const generateResponse = async (currentMessages: Message[]) => {
     setIsLoading(true)
-    window.speechSynthesis.cancel() 
+    window.speechSynthesis.cancel()
     setSpeakingId(null)
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           messages: currentMessages,
-          model: selectedModel
+          model: selectedModel,
         }),
       })
 
-      if (!response.ok) throw new Error("Gagal menghubungi AI")
+      if (!response.ok) {
+        const ct = response.headers.get('content-type') || ''
+        let errMsg = `Error ${response.status}`
 
+        try {
+          if (ct.includes('application/json')) {
+            const j = await response.json()
+            errMsg = j?.text || j?.error?.message || j?.message || errMsg
+          } else {
+            errMsg = await response.text()
+          }
+        } catch {}
+
+        setMessages(prev => [
+          ...prev,
+          { id: (Date.now()+1).toString(), role: 'assistant', content: `❌ ${errMsg}` },
+        ])
+
+        return
+      }
+
+      const contentType = response.headers.get('content-type') || ''
       const assistantId = (Date.now() + 1).toString()
-      let assistantContent = ""
-      
-      setMessages(prev => [
-        ...prev,
-        { id: assistantId, role: 'assistant', content: "" }
-      ])
+
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+
+        setMessages(prev => [
+          ...prev,
+          {
+            id: assistantId,
+            role: 'assistant',
+            content: data.text ?? '',
+            imageUrl: data.imageUrl,
+            videoUrl: data.videoUrl,
+            videoOp: data.videoOp,
+          },
+        ])
+
+        if (data.videoOp) {
+          pollVideo(data.videoOp, assistantId)
+        }
+        return
+      }
+
+      let assistantContent = ''
+
+      setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }])
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
@@ -337,10 +431,10 @@ export default function Home() {
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          
+
           const text = decoder.decode(value, { stream: true })
           assistantContent += text
-          
+
           setMessages(prev => {
             const updated = [...prev]
             const lastMsg = updated[updated.length - 1]
@@ -351,10 +445,9 @@ export default function Home() {
           })
         }
       }
-
     } catch (error) {
-      console.error("Error:", error)
-      alert("Terjadi kesalahan saat menghubungi AI.")
+      console.error('Error:', error)
+      alert('Terjadi kesalahan saat menghubungi AI.')
     } finally {
       setIsLoading(false)
     }
@@ -421,18 +514,15 @@ export default function Home() {
   const isDark = theme === 'dark'
 
   return (
-    <main className={`relative min-h-screen selection:bg-cyan-500/30 overflow-hidden font-sans flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-800'}`}>
+    <main className={`relative h-screen overflow-hidden selection:bg-cyan-500/30 font-sans flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-800'}`}>
       
       <div className="absolute inset-0 z-0 pointer-events-none fixed">
         <div className={`absolute inset-0 ${isDark ? 'bg-grid-white' : 'bg-grid-black'} bg-[size:50px_50px]`} />
         <div className={`absolute inset-0 ${isDark ? 'bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80' : 'bg-gradient-to-t from-slate-100 via-slate-100/50 to-slate-100/80'}`} />
       </div>
 
-      <header className={`sticky top-0 z-30 flex items-center justify-between px-4 py-3 border-b shadow-sm transition-colors duration-300 
-        ${isDark 
-          ? 'bg-slate-950/80 backdrop-blur-md border-white/5' 
-          : 'bg-slate-100/80 backdrop-blur-md border-slate-200'
-        }`}
+      <header className={`fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 border-b shadow-sm transition-colors duration-300 
+        ${isDark ? 'bg-slate-950/80 backdrop-blur-md border-white/5' : 'bg-slate-100/80 backdrop-blur-md border-slate-200'}`}
       >
         
         <div className="flex items-center gap-3">
@@ -522,7 +612,7 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-10 pb-40">
+      <div className="relative z-10 flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 pt-24 pb-40">
         <div className="max-w-3xl mx-auto space-y-8">
           
           {messages.length === 0 && (
@@ -559,7 +649,7 @@ export default function Home() {
                     <img
                       src="/favicon.ico"
                       alt="Logo Reka"
-                      className="w-7.5 h-7.5"
+                      className={`w-7.5 h-7.5 ${msg.videoOp && !msg.videoUrl ? 'animate-spin' : ''}`}
                     />
                   </div>
                 )}
@@ -582,14 +672,54 @@ export default function Home() {
                 >
 
                   <div className={`prose max-w-none text-sm md:text-base leading-relaxed ${isDark ? 'prose-invert' : 'prose-slate'}`}>
-                    <ReactMarkdown 
+                    {msg.imageUrl && (
+                      <img
+                        src={msg.imageUrl}
+                        alt="Generated"
+                        className="mb-3 max-h-80 w-auto rounded-xl border border-white/10 object-cover cursor-zoom-in"
+                        onClick={() =>
+                          setLightbox({
+                            kind: 'image',
+                            src: msg.imageUrl!,
+                            filename: `reka-image-${msg.id}.png`,
+                          })
+                        }
+                      />
+                    )}
+
+                    {msg.videoUrl && (
+                      <div
+                        className="mb-3 w-full rounded-xl border border-white/10 overflow-hidden cursor-zoom-in"
+                        onClick={() =>
+                          setLightbox({
+                            kind: 'video',
+                            src: msg.videoUrl!,
+                            filename: `reka-video-${msg.id}.mp4`,
+                          })
+                        }
+                      >
+                        <video
+                          src={msg.videoUrl}
+                          muted
+                          playsInline
+                          className="w-full block pointer-events-none"
+                        />
+                        <div className="absolute" />
+                      </div>
+                    )}
+
+                    {msg.videoOp && !msg.videoUrl && (
+                      <div className="text-xs text-slate-400 mt-2">⏳ Rendering video…</div>
+                    )}
+
+                    <ReactMarkdown
                       rehypePlugins={[rehypeHighlight]}
                       components={{
-                        pre: ({ children }) => <>{children}</>, 
-                        code: ({ node, className, children, ...props }) => {
+                        pre: ({ children }) => <>{children}</>,
+                        code: ({ className, children, ...props }) => {
                           const match = /language-(\w+)/.exec(className || '')
-                          const isCodeBlock = !!match;
-                          
+                          const isCodeBlock = !!match
+
                           if (isCodeBlock) {
                             return (
                               <CodeBlock className={className} {...props}>
@@ -597,83 +727,125 @@ export default function Home() {
                               </CodeBlock>
                             )
                           }
-                          
+
                           return (
-                            <code className={`${className} px-1.5 py-0.5 rounded font-mono text-sm ${isDark ? 'bg-slate-800 text-cyan-200' : 'bg-slate-300 text-cyan-800'}`} {...props}>
+                            <code
+                              className={`${className} px-1.5 py-0.5 rounded font-mono text-sm ${
+                                isDark ? 'bg-slate-800 text-cyan-200' : 'bg-slate-300 text-cyan-800'
+                              }`}
+                              {...props}
+                            >
                               {children}
                             </code>
                           )
-                        }
+                        },
                       }}
                     >
                       {msg.content}
                     </ReactMarkdown>
                   </div>
 
-                  {msg.role === 'assistant' && !isLoading && (
-                     <div className={`mt-3 pt-3 flex flex-wrap items-center gap-4 ${isDark ? 'border-t border-white/10' : 'border-t border-slate-400'}`}>
-                      
-                        <button 
-                           onClick={() => handleSpeak(msg.content, msg.id)}
-                           className={`flex items-center gap-1.5 text-xs transition-colors ${speakingId === msg.id 
-                              ? 'text-cyan-600 animate-pulse'
-                              : isDark 
-                                  ? 'text-slate-400 hover:text-white'
-                                  : 'text-slate-600 hover:text-slate-900' 
-                           }`}
-                           title={speakingId === msg.id ? "Berhenti bicara" : "Bacakan respon"}
-                        >
-                           {speakingId === msg.id ? (
-                             <>
-                               <StopCircle className="w-3.5 h-3.5" />
-                               <span>Stop</span>
-                             </>
-                           ) : (
-                             <>
-                               <Volume2 className="w-3.5 h-3.5" />
-                               <span>Baca</span>
-                             </>
-                           )}
-                        </button>
+                  {msg.role === 'assistant' && !isLoading && (() => {
+                    const hasMedia = !!msg.imageUrl || !!msg.videoUrl
 
-                        <button 
-                           onClick={() => handleCopyContent(msg.content, msg.id)}
-                           className={`flex items-center gap-1.5 text-xs transition-colors 
-                           ${isDark 
-                              ? 'text-slate-400 hover:text-white' 
-                              : 'text-slate-600 hover:text-slate-900' 
-                           }`}
-                           title="Salin respon"
-                        >
-                           {copiedMessageId === msg.id ? (
-                             <>
-                               <Check className="w-3.5 h-3.5 text-green-400" />
-                               <span className="text-green-400">Disalin</span>
-                             </>
-                           ) : (
-                             <>
-                               <Copy className="w-3.5 h-3.5" />
-                               <span>Salin</span>
-                             </>
-                           )}
-                        </button>
+                    return (
+                      <div className={`mt-3 pt-3 flex flex-wrap items-center gap-4 ${isDark ? 'border-t border-white/10' : 'border-t border-slate-400'}`}>
+
+                        {!hasMedia && (
+                          <>
+                            <button
+                              onClick={() => handleSpeak(msg.content, msg.id)}
+                              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                speakingId === msg.id
+                                  ? 'text-cyan-600 animate-pulse'
+                                  : isDark
+                                    ? 'text-slate-400 hover:text-white'
+                                    : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title={speakingId === msg.id ? "Berhenti bicara" : "Bacakan respon"}
+                            >
+                              {speakingId === msg.id ? (
+                                <>
+                                  <StopCircle className="w-3.5 h-3.5" />
+                                  <span>Stop</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                  <span>Baca</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              onClick={() => handleCopyContent(msg.content, msg.id)}
+                              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Salin respon"
+                            >
+                              {copiedMessageId === msg.id ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-green-400" />
+                                  <span className="text-green-400">Disalin</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Salin</span>
+                                </>
+                              )}
+                            </button>
+                          </>
+                        )}
+
+                        {hasMedia && (
+                          <>
+                            {msg.imageUrl && (
+                              <a
+                                href={msg.imageUrl}
+                                download={`reka-image-${msg.id}.png`}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Download gambar"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download</span>
+                              </a>
+                            )}
+
+                            {msg.videoUrl && (
+                              <a
+                                href={msg.videoUrl}
+                                download={`reka-video-${msg.id}.mp4`}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Download video"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download</span>
+                              </a>
+                            )}
+                          </>
+                        )}
 
                         {index === messages.length - 1 && (
-                          <button 
-                             onClick={handleRegenerate}
-                             className={`flex items-center gap-1.5 text-xs transition-colors 
-                             ${isDark 
-                                ? 'text-slate-400 hover:text-white' 
-                                : 'text-slate-600 hover:text-slate-900' 
-                             }`}
-                             title="Ulangi respon"
+                          <button
+                            onClick={handleRegenerate}
+                            className={`flex items-center gap-1.5 text-xs transition-colors ${
+                              isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="Ulangi respon"
                           >
-                             <RotateCw className="w-3.5 h-3.5" />
-                             <span>Ulangi</span>
+                            <RotateCw className="w-3.5 h-3.5" />
+                            <span>Ulangi</span>
                           </button>
                         )}
-                     </div>
-                  )}
+                      </div>
+                    )
+                  })()}
 
                   {msg.role === 'user' && !isLoading && (
                     <div className={`mt-2 pt-2 flex items-center justify-end gap-4 ${isDark ? 'border-t border-slate-700/50' : 'border-t border-slate-400'}`}>
@@ -834,6 +1006,64 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      <AnimatePresence>
+        {lightbox && (
+          <motion.div
+            className="fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setLightbox(null)}
+          >
+            <motion.div
+              className="relative w-full max-w-5xl"
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute -top-12 right-0 flex items-center gap-2">
+                <a
+                  href={lightbox.src}
+                  download={lightbox.filename}
+                  className="px-3 py-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
+                >
+                  Download
+                </a>
+                <button
+                  onClick={() => setLightbox(null)}
+                  className="px-3 py-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
+                >
+                  Tutup (Esc)
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/30 overflow-hidden flex items-center justify-center">
+                {lightbox.kind === 'image' ? (
+                  <img
+                    src={lightbox.src}
+                    alt="Preview"
+                    className="max-h-[85vh] max-w-[95vw] object-contain"
+                  />
+                ) : (
+                  <video
+                    src={lightbox.src}
+                    controls
+                    autoPlay
+                    playsInline
+                    className="max-h-[85vh] w-full object-contain bg-black"
+                  />
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   )
+}
+
+function pollVideo(videoOp: any, assistantId: string) {
+  throw new Error('Function not implemented.')
 }

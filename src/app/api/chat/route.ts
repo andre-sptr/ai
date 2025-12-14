@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText } from 'ai';
+import { streamText, generateText, experimental_generateImage as generateImage } from 'ai'
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -42,6 +42,97 @@ export async function POST(req: Request) {
     }
 
     const { messages, model } = await req.json();
+    const selectedModel = model || 'gemini-2.5-flash';
+
+    if (selectedModel.startsWith('imagen-')) {
+      const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
+      const prompt = (lastUser?.content || '').trim() || 'Generate an image.'
+
+      const { image } = await generateImage({
+        model: google.image(selectedModel),
+        prompt,
+        aspectRatio: '1:1',
+      })
+
+      const imageUrl = `data:${image.mediaType};base64,${image.base64}`
+
+      return new Response(JSON.stringify({ text: '', imageUrl }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const isGeminiImageModel =
+      selectedModel === 'gemini-2.5-flash-image' ||
+      selectedModel === 'gemini-3-pro-image-preview'
+
+    if (isGeminiImageModel) {
+      const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
+      const prompt = (lastUser?.content || '').trim() || 'Generate an image.'
+
+      const result = await generateText({
+        model: google(selectedModel),
+        prompt,
+        providerOptions: {
+          google: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio: '1:1' },
+          },
+        },
+      })
+
+      const imgFile = result.files?.find(f => f.mediaType?.startsWith('image/'))
+      if (!imgFile) {
+        return new Response(JSON.stringify({ text: result.text ?? '', imageUrl: null }), {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+
+      const base64 = Buffer.from(imgFile.uint8Array).toString('base64')
+      const imageUrl = `data:${imgFile.mediaType};base64,${base64}`
+
+      return new Response(JSON.stringify({ text: result.text ?? '', imageUrl }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (selectedModel.startsWith('veo-')) {
+      const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
+      const prompt = (lastUser?.content || '').trim() || 'Generate a short video.'
+      const baseUrl = 'https://generativelanguage.googleapis.com/v1beta'
+      const startRes = await fetch(
+        `${baseUrl}/models/${selectedModel}:predictLongRunning`,
+        {
+          method: 'POST',
+          headers: {
+            'x-goog-api-key': process.env.GEMINI_API_KEY!,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            instances: [{ prompt }],
+            parameters: {
+              aspectRatio: '16:9',
+            },
+          }),
+        }
+      )
+
+      if (!startRes.ok) {
+        const errText = await startRes.text()
+        return new Response(errText, {
+          status: startRes.status,
+          headers: { 'Content-Type': startRes.headers.get('content-type') || 'application/json' },
+        })
+      }
+
+      const startJson = await startRes.json()
+      return new Response(
+        JSON.stringify({
+          text: '🎬 Oke, aku sedang membuat videonya…',
+          videoOp: startJson.name,
+        }),
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+    }
 
     const formattedMessages = messages.map((m: any) => {
       if (m.role === 'user' && m.imageUrl) {
@@ -49,26 +140,20 @@ export async function POST(req: Request) {
           role: 'user',
           content: [
             { type: 'text', text: m.content },
-            { type: 'image', image: m.imageUrl }
-          ]
-        };
+            { type: 'image', image: m.imageUrl },
+          ],
+        }
       }
-      return {
-        role: m.role,
-        content: m.content
-      };
-    });
-
-    const selectedModel = model || 'gemini-2.5-flash';
+      return { role: m.role, content: m.content }
+    })
 
     const result = streamText({
-      model: google(selectedModel), 
+      model: google(selectedModel),
       messages: formattedMessages,
       system: SYSTEM_PROMPT,
-    });
+    })
     
     return result.toTextStreamResponse();
-
   } catch (error) {
     console.error("🔥 SERVER ERROR:", error);
     return new Response(JSON.stringify({ error: "Gagal memproses pesan" }), { 
