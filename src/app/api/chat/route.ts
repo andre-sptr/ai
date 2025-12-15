@@ -1,8 +1,6 @@
-// src/app/api/chat/route.ts - FIXED VERSION
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { streamText, generateText, experimental_generateImage as generateImage, tool } from 'ai'
-import { AVAILABLE_TOOLS, executeTool } from '@/lib/tools/tools'
-import { z } from 'zod'
+import { streamText, generateText, experimental_generateImage as generateImage } from 'ai'
+import { executeTool } from '@/lib/tools/tools'
 
 const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -22,74 +20,87 @@ IDENTITAS & GAYA:
 2. **Filosofi:** Nama "Reka" berarti "rekayasa" atau merancang. Tugasmu adalah membantu pengguna merancang kode menjadi kenyataan visual.
 3. **Gaya Bicara:** Profesional, to the point, namun ramah dan suportif (seperti senior developer).
 
-TOOLS YANG TERSEDIA:
-Kamu memiliki akses ke beberapa tools yang bisa kamu gunakan:
-- **calculator**: Untuk perhitungan matematika kompleks
-- **get_current_time**: Untuk mendapatkan waktu di timezone tertentu
-- **generate_todo_list**: Untuk membuat daftar tugas terstruktur
-- **search_definition**: Untuk mencari definisi istilah teknis
+TOOLS YANG TERSEDIA (Ketika tools mode aktif):
+Kamu bisa menggunakan tools berikut dengan format JSON:
 
-Gunakan tools ini ketika relevan dengan pertanyaan user. Jangan ragu untuk menggunakan multiple tools jika diperlukan.
+1. **Calculator** - Untuk perhitungan matematika
+   Format: {"tool": "calculator", "expression": "2 + 2"}
+   
+2. **Get Current Time** - Untuk waktu di timezone tertentu
+   Format: {"tool": "get_current_time", "timezone": "Asia/Jakarta"}
+   
+3. **Generate TODO** - Untuk membuat daftar tugas
+   Format: {"tool": "generate_todo_list", "project_description": "...", "priority": "medium"}
+   
+4. **Search Definition** - Untuk mencari definisi
+   Format: {"tool": "search_definition", "term": "react", "language": "id"}
+
+CARA MENGGUNAKAN TOOLS:
+- Jika user bertanya sesuatu yang memerlukan tool, GUNAKAN tool tersebut
+- Tulis JSON tool call di awal responsenya
+- Jelaskan hasil tool dengan bahasa natural
+- Contoh: 
+  User: "Hitung 25 * 4 + sqrt(81)"
+  You: {"tool": "calculator", "expression": "25 * 4 + sqrt(81)"}
+       
+       Setelah saya menghitung, hasilnya adalah 109.
 
 PANDUAN MENJAWAB:
 1. **Gaya Kode:** Tulis kode yang bersih, modern, dan efisien. Gunakan TypeScript.
-2. **Styling:** Selalu gunakan Tailwind CSS untuk styling. Jangan gunakan CSS module atau style tag manual kecuali diminta.
+2. **Styling:** Selalu gunakan Tailwind CSS untuk styling.
 3. **Icons:** Gunakan 'lucide-react' untuk ikon jika diperlukan.
-4. **Fitur Preview (PENTING):** 
-   - Jika user meminta untuk "membuat desain", "membuat UI", atau "meniru gambar" yang bersifat visual, berikan output dalam format **HTML MURNI** (bukan JSX/React Component) dengan class Tailwind lengkap.
-   - Alasannya: Aplikasi ini memiliki fitur "Live Preview" yang hanya bisa merender HTML statis.
-   - Contoh: Jangan berikan \`export default function Card()...\`, tapi berikan \`<div class="bg-white...">...</div>\`.
-5. **React Components:**
-   - Jika user secara spesifik meminta Component React/Next.js (bukan sekadar tampilan UI), berikan kode JSX/TSX.
-   - Jangan lupa tambahkan directive 'use client' di baris paling atas jika komponen menggunakan hooks (useState, useEffect, dll).
-6. **Analisis Gambar:** Kamu memiliki kemampuan melihat gambar. Jika user mengupload screenshot UI, analisislah struktur layout, warna, dan tipografi.
+4. **Fitur Preview:** HTML murni untuk preview, bukan JSX.
 
 Jawablah dengan ringkas dan fokus pada solusi kode.
 `;
 
-// Define tools in correct format for Vercel AI SDK
-const aiSdkTools = {
-  calculator: tool({
-    description: 'Melakukan perhitungan matematika. Mendukung operasi: +, -, *, /, ^, sqrt, sin, cos, tan, log',
-    parameters: z.object({
-      expression: z.string().describe('Ekspresi matematika yang akan dihitung, contoh: "2 + 2", "sqrt(16)"')
-    }),
-    execute: async ({ expression }) => {
-      return await executeTool('calculator', { expression })
+const SYSTEM_PROMPT_NO_TOOLS = `
+Kamu adalah "Reka", Asisten Coding AI yang canggih dan ahli dalam:
+- Next.js 16 (App Router)
+- React 19
+- Tailwind CSS v4
+- TypeScript
+
+IDENTITAS & GAYA:
+1. **Nama:** Perkenalkan dirimu sebagai "Reka" jika ditanya.
+2. **Filosofi:** Nama "Reka" berarti "rekayasa" atau merancang. Tugasmu adalah membantu pengguna merancang kode menjadi kenyataan visual.
+3. **Gaya Bicara:** Profesional, to the point, namun ramah dan suportif (seperti senior developer).
+
+PANDUAN MENJAWAB:
+1. **Gaya Kode:** Tulis kode yang bersih, modern, dan efisien. Gunakan TypeScript.
+2. **Styling:** Selalu gunakan Tailwind CSS untuk styling.
+3. **Icons:** Gunakan 'lucide-react' untuk ikon jika diperlukan.
+4. **Fitur Preview:** HTML murni untuk preview, bukan JSX.
+
+Jawablah dengan ringkas dan fokus pada solusi kode.
+`;
+
+function parseToolCalls(text: string): { toolCalls: any[], cleanText: string } {
+  const toolCalls: any[] = []
+  let cleanText = text
+
+  const jsonRegex = /\{"tool":\s*"([^"]+)"[^}]*\}/g
+  let match
+
+  while ((match = jsonRegex.exec(text)) !== null) {
+    try {
+      const jsonStr = match[0]
+      const toolCall = JSON.parse(jsonStr)
+      
+      if (toolCall.tool) {
+        toolCalls.push({
+          id: `tool_${Date.now()}_${toolCalls.length}`,
+          name: toolCall.tool,
+          arguments: { ...toolCall }
+        })
+        
+        cleanText = cleanText.replace(jsonStr, '').trim()
+      }
+    } catch (e) {
     }
-  }),
-  
-  get_current_time: tool({
-    description: 'Mendapatkan waktu saat ini di timezone tertentu',
-    parameters: z.object({
-      timezone: z.string().describe('Timezone dalam format IANA, contoh: "Asia/Jakarta", "UTC"')
-    }),
-    execute: async ({ timezone }) => {
-      return await executeTool('get_current_time', { timezone })
-    }
-  }),
-  
-  generate_todo_list: tool({
-    description: 'Membuat daftar TODO yang terstruktur dari deskripsi proyek atau tugas',
-    parameters: z.object({
-      project_description: z.string().describe('Deskripsi proyek atau tugas yang akan dibuatkan TODO list'),
-      priority: z.enum(['high', 'medium', 'low']).optional().describe('Tingkat prioritas')
-    }),
-    execute: async ({ project_description, priority }) => {
-      return await executeTool('generate_todo_list', { project_description, priority })
-    }
-  }),
-  
-  search_definition: tool({
-    description: 'Mencari definisi atau penjelasan dari suatu istilah',
-    parameters: z.object({
-      term: z.string().describe('Istilah atau kata yang akan dicari definisinya'),
-      language: z.enum(['id', 'en']).optional().describe('Bahasa untuk hasil pencarian')
-    }),
-    execute: async ({ term, language }) => {
-      return await executeTool('search_definition', { term, language })
-    }
-  })
+  }
+
+  return { toolCalls, cleanText }
 }
 
 export async function POST(req: Request) {
@@ -102,7 +113,6 @@ export async function POST(req: Request) {
     const { messages, model, useTools } = await req.json();
     const selectedModel = model || 'gemini-2.5-flash';
 
-    // Handle image generation models
     if (selectedModel.startsWith('imagen-')) {
       const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
       const prompt = (lastUser?.content || '').trim() || 'Generate an image.'
@@ -120,7 +130,6 @@ export async function POST(req: Request) {
       })
     }
 
-    // Handle Gemini image models
     const isGeminiImageModel =
       selectedModel === 'gemini-2.5-flash-image' ||
       selectedModel === 'gemini-3-pro-image-preview'
@@ -155,7 +164,6 @@ export async function POST(req: Request) {
       })
     }
 
-    // Handle video generation
     if (selectedModel.startsWith('veo-')) {
       const lastUser = [...messages].reverse().find((m: any) => m.role === 'user')
       const prompt = (lastUser?.content || '').trim() || 'Generate a short video.'
@@ -195,7 +203,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // Format messages
     const formattedMessages = messages.map((m: any) => {
       if (m.role === 'user' && m.imageUrl) {
         return {
@@ -216,49 +223,40 @@ export async function POST(req: Request) {
           model: google(selectedModel),
           messages: formattedMessages,
           system: SYSTEM_PROMPT,
-          tools: aiSdkTools,
-          maxSteps: 5,
         })
 
-        // Collect tool calls and results
-        const toolCalls: any[] = []
-        const toolResults: any[] = []
+        const responseText = result.text || ''
+        const { toolCalls, cleanText } = parseToolCalls(responseText)
 
-        // Process tool calls and results from steps
-        if (result.steps) {
-          result.steps.forEach((step: any, stepIndex: number) => {
-            if (step.toolCalls && step.toolCalls.length > 0) {
-              step.toolCalls.forEach((tc: any) => {
-                toolCalls.push({
-                  id: tc.toolCallId,
-                  name: tc.toolName,
-                  arguments: tc.args
-                })
-              })
-            }
-            
-            if (step.toolResults && step.toolResults.length > 0) {
-              step.toolResults.forEach((tr: any) => {
-                toolResults.push({
-                  toolCallId: tr.toolCallId,
-                  toolName: tr.toolName,
-                  result: tr.result
-                })
-              })
-            }
+        if (toolCalls.length > 0) {
+          const toolResults = await Promise.all(
+            toolCalls.map(async (tc: any) => {
+              const { tool, ...args } = tc.arguments
+              const result = await executeTool(tc.name, args)
+              return {
+                toolCallId: tc.id,
+                toolName: tc.name,
+                result
+              }
+            })
+          )
+
+          return new Response(JSON.stringify({
+            text: cleanText || '🔧 Menggunakan tools...',
+            toolCalls,
+            toolResults
+          }), {
+            headers: { 'Content-Type': 'application/json' },
           })
         }
 
         return new Response(JSON.stringify({
-          text: result.text || '',
-          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-          toolResults: toolResults.length > 0 ? toolResults : undefined,
+          text: responseText
         }), {
           headers: { 'Content-Type': 'application/json' },
         })
       } catch (error) {
         console.error('Tools error:', error)
-        // Fallback to normal generation if tools fail
         return new Response(JSON.stringify({
           text: 'Maaf, terjadi kesalahan saat menggunakan tools. Silakan coba lagi atau matikan tools.',
           error: String(error)
@@ -273,7 +271,7 @@ export async function POST(req: Request) {
     const result = streamText({
       model: google(selectedModel),
       messages: formattedMessages,
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT_NO_TOOLS,
     })
     
     return result.toTextStreamResponse();
