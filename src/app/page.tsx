@@ -4,7 +4,6 @@ import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, MicOff, Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown, Paperclip } from 'lucide-react'
 import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
-import { chunkText, findRelevantChunks } from '@/lib/rag-lite'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import mermaid from 'mermaid'
@@ -498,7 +497,7 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [useTools, setUseTools] = useState(false)
-  const [docContext, setDocContext] = useState<{ name: string; chunks: string[] } | null>(null)
+  const [docContext, setDocContext] = useState<{ name: string; content: string } | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const { isListening, transcript, startListening, stopListening, setTranscript } = useSpeechRecognition()
   const docInputRef = useRef<HTMLInputElement>(null)
@@ -749,13 +748,10 @@ export default function Home() {
       
       if (!res.ok) throw new Error(data.error)
 
-      const chunks = chunkText(data.text, 800, 100) 
-      
       setDocContext({
         name: data.filename,
-        chunks: chunks
+        content: data.text
       })
-      console.log(`Document chunked into ${chunks.length} parts.`)
       
     } catch (err: any) {
       alert(err.message)
@@ -913,15 +909,8 @@ export default function Home() {
 
     let finalContent = userText
 
-    if (currentDoc && currentDoc.chunks.length > 0) {
-      const relevantChunks = findRelevantChunks(userText, currentDoc.chunks, 4) 
-      const contextString = relevantChunks.length > 0 
-        ? relevantChunks.join('\n\n---\n\n')
-        : currentDoc.chunks.slice(0, 2).join('\n\n')
-
-      finalContent = `[KONTEKS DOKUMEN: ${currentDoc.name}]\nBerikut adalah bagian dokumen yang relevan dengan pertanyaan user:\n\n${contextString}\n\n[PERTANYAAN USER]:\n${userText}`
-      
-      console.log(`RAG: Used ${relevantChunks.length} chunks for context.`)
+    if (currentDoc) {
+      finalContent = `[KONTEKS DOKUMEN: ${currentDoc.name}]\n${currentDoc.content}\n\n[PERTANYAAN USER]:\n${userText}`
     }
     
     const newMessage: Message = { 
@@ -1111,7 +1100,7 @@ export default function Home() {
                 </span>
               </h1>
               <p className="text-slate-400 text-lg">
-                Mulai percakapan dengan Reka. Ubah ide menjadi kode program secara realtime.
+                Mulai percakapan dengan Reka. Ubah ide menjadi kode secara realtime.
                 {useTools && (
                   <motion.span 
                     initial={{ opacity: 0 }}
@@ -1594,8 +1583,8 @@ export default function Home() {
                 onClick={isListening ? stopListening : startListening}
                 className={`p-2 rounded-lg transition-all active:scale-95 ${
                   isListening 
-                    ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500/30'
-                    : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'
+                    ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500/30' // Style saat merekam
+                    : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800' // Style normal
                 }`}
                 title={isListening ? "Klik untuk berhenti" : "Klik untuk bicara (Bahasa Indonesia)"}
               >
