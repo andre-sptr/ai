@@ -8,11 +8,19 @@ import rehypeHighlight from 'rehype-highlight'
 
 type Message = {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'tool';
   content: string;
   imageUrl?: string;
   videoUrl?: string;
   videoOp?: string;
+  toolCalls?: Array<{
+    id: string;
+    name: string;
+    arguments: any;
+  }>;
+  toolCallId?: string;
+  toolName?: string;
+  result?: any;
 }
 
 const extractCodeText = (children: any): string => {
@@ -127,6 +135,201 @@ const CodeBlock = ({ children, className, ...props }: any) => {
   )
 }
 
+const ToolCallDisplay = ({ toolCalls, theme }: { 
+  toolCalls: Array<{ id: string; name: string; arguments: any }>;
+  theme: 'light' | 'dark';
+}) => {
+  const isDark = theme === 'dark'
+  
+  const getToolIcon = (toolName: string) => {
+    switch (toolName) {
+      case 'calculator': return '🧮'
+      case 'get_current_time': return '🕐'
+      case 'generate_todo_list': return '📋'
+      case 'search_definition': return '📖'
+      default: return '🔧'
+    }
+  }
+
+  const getToolDisplayName = (toolName: string) => {
+    return toolName
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
+
+  return (
+    <div className="my-3 space-y-2">
+      {toolCalls.map((call, index) => (
+        <motion.div 
+          key={call.id}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className={`flex items-start gap-3 p-3 rounded-lg border ${
+            isDark 
+              ? 'bg-cyan-950/20 border-cyan-500/30 shadow-lg shadow-cyan-500/5' 
+              : 'bg-cyan-50 border-cyan-300 shadow-sm'
+          }`}
+        >
+          <span className="text-2xl">{getToolIcon(call.name)}</span>
+          <div className="flex-1 min-w-0">
+            <div className={`text-xs font-semibold uppercase tracking-wider mb-1.5 flex items-center gap-2 ${
+              isDark ? 'text-cyan-400' : 'text-cyan-700'
+            }`}>
+              <Zap className="w-3.5 h-3.5" />
+              {getToolDisplayName(call.name)}
+            </div>
+            <div className={`text-xs ${
+              isDark ? 'text-slate-400' : 'text-slate-600'
+            }`}>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(call.arguments).map(([key, value]) => (
+                  <div key={key} className={`px-2 py-1 rounded ${
+                    isDark ? 'bg-slate-800/50' : 'bg-white'
+                  }`}>
+                    <span className={isDark ? 'text-slate-500' : 'text-slate-500'}>
+                      {key}:
+                    </span>
+                    {' '}
+                    <span className={`font-mono ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>
+                      {typeof value === 'string' ? `"${value}"` : String(value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  )
+}
+
+const ToolResultDisplay = ({ toolName, result, theme }: {
+  toolName: string;
+  result: any;
+  theme: 'light' | 'dark';
+}) => {
+  const isDark = theme === 'dark'
+  const isSuccess = result.success !== false
+
+  const getToolIcon = (toolName: string) => {
+    switch (toolName) {
+      case 'calculator': return '🧮'
+      case 'get_current_time': return '🕐'
+      case 'generate_todo_list': return '📋'
+      case 'search_definition': return '📖'
+      default: return '🔧'
+    }
+  }
+
+  const getToolDisplayName = (toolName: string) => {
+    return toolName
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
+
+  const formatResult = (result: any) => {
+    if (result.formatted) return result.formatted
+    if (result.datetime) return result.datetime
+    if (result.definition) return result.definition
+    if (result.tasks) {
+      return result.tasks.map((t: any, i: number) => 
+        `${i + 1}. ${t.task}`
+      ).join('\n')
+    }
+    return JSON.stringify(result, null, 2)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`my-3 p-4 rounded-lg border ${
+        isSuccess 
+          ? isDark 
+            ? 'bg-green-950/20 border-green-500/30 shadow-lg shadow-green-500/5' 
+            : 'bg-green-50 border-green-300 shadow-sm'
+          : isDark
+            ? 'bg-red-950/20 border-red-500/30 shadow-lg shadow-red-500/5'
+            : 'bg-red-50 border-red-300 shadow-sm'
+      }`}
+    >
+      <div className={`flex items-center gap-2 mb-3 ${
+        isSuccess 
+          ? isDark ? 'text-green-400' : 'text-green-700'
+          : isDark ? 'text-red-400' : 'text-red-700'
+      }`}>
+        <span className="text-xl">{getToolIcon(toolName)}</span>
+        <span className="text-sm font-semibold">
+          {isSuccess ? '✓' : '✗'} {getToolDisplayName(toolName)}
+        </span>
+      </div>
+
+      <div className={`text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+        {isSuccess ? (
+          <div className="space-y-2">
+            {result.formatted && (
+              <div className={`font-mono text-base p-3 rounded ${
+                isDark ? 'bg-slate-800/50' : 'bg-white'
+              }`}>
+                {result.formatted}
+              </div>
+            )}
+            
+            {result.datetime && (
+              <div className={`p-3 rounded ${isDark ? 'bg-slate-800/50' : 'bg-white'}`}>
+                <div className="text-xs text-slate-500 mb-1">📍 {result.timezone}</div>
+                <div className="font-medium">{result.datetime}</div>
+              </div>
+            )}
+
+            {result.definition && (
+              <div className={`p-3 rounded ${isDark ? 'bg-slate-800/50' : 'bg-white'}`}>
+                <div className="text-xs text-slate-500 mb-1">📖 {result.term}</div>
+                <div>{result.definition}</div>
+              </div>
+            )}
+
+            {result.tasks && (
+              <div className={`p-3 rounded ${isDark ? 'bg-slate-800/50' : 'bg-white'}`}>
+                <div className="text-xs text-slate-500 mb-2">
+                  📋 {result.total_tasks} tasks • {result.priority} priority • ~{result.estimated_days} days
+                </div>
+                <ol className="space-y-1.5 ml-4">
+                  {result.tasks.map((task: any, i: number) => (
+                    <li key={i} className="text-sm">
+                      {task.task}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {!result.formatted && !result.datetime && !result.definition && !result.tasks && (
+              <pre className={`text-xs font-mono overflow-x-auto p-3 rounded ${
+                isDark ? 'bg-slate-800/50' : 'bg-white'
+              }`}>
+                {JSON.stringify(result, null, 2)}
+              </pre>
+            )}
+          </div>
+        ) : (
+          <div className={`p-3 rounded ${isDark ? 'bg-slate-800/50' : 'bg-white'}`}>
+            <div className="font-medium mb-1">Error:</div>
+            <div className="text-sm opacity-90">{result.error}</div>
+            {result.suggestion && (
+              <div className="text-xs mt-2 opacity-75">💡 {result.suggestion}</div>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
 export default function Home() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -139,6 +342,7 @@ export default function Home() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [useTools, setUseTools] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -372,6 +576,7 @@ export default function Home() {
         body: JSON.stringify({
           messages: currentMessages,
           model: selectedModel,
+          useTools: useTools,
         }),
       })
 
@@ -399,8 +604,43 @@ export default function Home() {
       const contentType = response.headers.get('content-type') || ''
       const assistantId = (Date.now() + 1).toString()
 
+      // ============= HANDLE JSON RESPONSE (Tools or Special) =============
       if (contentType.includes('application/json')) {
         const data = await response.json()
+
+        if (data.toolCalls && data.toolCalls.length > 0) {
+          const assistantMsg: Message = {
+            id: assistantId,
+            role: 'assistant',
+            content: data.text || '🔧 Menggunakan tools...',
+            toolCalls: data.toolCalls
+          }
+
+          setMessages(prev => [...prev, assistantMsg])
+
+          if (data.toolResults && data.toolResults.length > 0) {
+            setTimeout(() => {
+              setMessages(prev => {
+                const newMessages = [...prev]
+                
+                data.toolResults.forEach((tr: any) => {
+                  newMessages.push({
+                    id: `${Date.now()}-${tr.toolCallId}`,
+                    role: 'tool',
+                    content: '',
+                    toolCallId: tr.toolCallId,
+                    toolName: tr.toolName,
+                    result: tr.result
+                  })
+                })
+
+                return newMessages
+              })
+            }, 300)
+          }
+
+          return
+        }
 
         setMessages(prev => [
           ...prev,
@@ -420,6 +660,7 @@ export default function Home() {
         return
       }
 
+      // ============= HANDLE STREAMING RESPONSE (No Tools) =============
       let assistantContent = ''
 
       setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }])
@@ -544,6 +785,25 @@ export default function Home() {
             >
                 {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
+
+            <label className={`flex items-center gap-2 text-xs cursor-pointer px-3 py-1.5 rounded-full border transition-all ${
+              useTools 
+                ? isDark 
+                  ? 'bg-cyan-950/30 border-cyan-500/50 text-cyan-400' 
+                  : 'bg-cyan-100 border-cyan-500 text-cyan-700'
+                : isDark
+                  ? 'bg-slate-900 border-slate-700 text-slate-400'
+                  : 'bg-slate-200 border-slate-400 text-slate-600'
+            }`}>
+              <input
+                type="checkbox"
+                checked={useTools}
+                onChange={(e) => setUseTools(e.target.checked)}
+                className="w-3.5 h-3.5 rounded"
+              />
+              <Zap className="w-3.5 h-3.5" />
+              <span>Tools</span>
+            </label>
             
             <div className="relative">
                 <button
@@ -632,275 +892,315 @@ export default function Home() {
               </h1>
               <p className="text-slate-400 text-lg">
                 Mulai percakapan dengan Reka. Ubah ide menjadi kode secara realtime.
+                {useTools && (
+                  <span className="block mt-2 text-sm text-cyan-400">
+                    ⚡ Tools aktif: Calculator, Time, TODO List, Definitions
+                  </span>
+                )}
               </p>
             </motion.div>
           )}
 
           <AnimatePresence mode='popLayout'>
-            {messages.map((msg, index) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {msg.role !== 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
-                    <img
-                      src="/favicon.ico"
-                      alt="Logo Reka"
-                      className={`w-7.5 h-7.5 ${msg.videoOp && !msg.videoUrl ? 'animate-spin' : ''}`}
-                    />
-                  </div>
-                )}
+            {messages.map((msg, index) => {
+              if (msg.role === 'tool') return null
 
-                <div className={`relative max-w-[85%] rounded-2xl p-4 shadow-xl backdrop-blur-sm border 
-                  ${editingIndex === index 
-                      ? isDark 
-                          ? 'ring-2 ring-cyan-500/50 border-cyan-500/30 bg-slate-800' 
-                          : 'ring-2 ring-cyan-600/60 border-cyan-600/60 bg-slate-200' 
-                      : ''
-                  } 
-                  ${msg.role === 'user' 
-                    ? isDark 
-                        ? 'bg-slate-800/80 border-slate-700 text-slate-100 rounded-br-none' 
-                        : 'bg-slate-200 border-slate-400 text-slate-900 rounded-br-none' 
-                    : isDark 
-                        ? 'bg-slate-950/50 border-white/10 text-slate-300 rounded-bl-none prose-headings:text-cyan-200 prose-strong:text-cyan-400' 
-                        : 'bg-white border-slate-400 text-slate-900 rounded-bl-none prose-headings:text-cyan-700 prose-strong:text-cyan-600'
-                  }`}
+              return (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-
-                  <div className={`prose max-w-none text-sm md:text-base leading-relaxed ${isDark ? 'prose-invert' : 'prose-slate'}`}>
-                    {msg.imageUrl && (
+                  {msg.role !== 'user' && (
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
                       <img
-                        src={msg.imageUrl}
-                        alt="Generated"
-                        className="mb-3 max-h-80 w-auto rounded-xl border border-white/10 object-cover cursor-zoom-in"
-                        onClick={() =>
-                          setLightbox({
-                            kind: 'image',
-                            src: msg.imageUrl!,
-                            filename: `reka-image-${msg.id}.png`,
-                          })
-                        }
+                        src="/favicon.ico"
+                        alt="Logo Reka"
+                        className={`w-7.5 h-7.5 ${msg.videoOp && !msg.videoUrl ? 'animate-spin' : ''}`}
                       />
-                    )}
-
-                    {msg.videoUrl && (
-                      <div
-                        className="mb-3 w-full rounded-xl border border-white/10 overflow-hidden cursor-zoom-in"
-                        onClick={() =>
-                          setLightbox({
-                            kind: 'video',
-                            src: msg.videoUrl!,
-                            filename: `reka-video-${msg.id}.mp4`,
-                          })
-                        }
-                      >
-                        <video
-                          src={msg.videoUrl}
-                          muted
-                          playsInline
-                          className="w-full block pointer-events-none"
-                        />
-                        <div className="absolute" />
-                      </div>
-                    )}
-
-                    {msg.videoOp && !msg.videoUrl && (
-                      <div className="text-xs text-slate-400 mt-2">⏳ Rendering video…</div>
-                    )}
-
-                    <ReactMarkdown
-                      rehypePlugins={[rehypeHighlight]}
-                      components={{
-                        pre: ({ children }) => <>{children}</>,
-                        code: ({ className, children, ...props }) => {
-                          const match = /language-(\w+)/.exec(className || '')
-                          const isCodeBlock = !!match
-
-                          if (isCodeBlock) {
-                            return (
-                              <CodeBlock className={className} {...props}>
-                                {children}
-                              </CodeBlock>
-                            )
-                          }
-
-                          return (
-                            <code
-                              className={`${className} px-1.5 py-0.5 rounded font-mono text-sm ${
-                                isDark ? 'bg-slate-800 text-cyan-200' : 'bg-slate-300 text-cyan-800'
-                              }`}
-                              {...props}
-                            >
-                              {children}
-                            </code>
-                          )
-                        },
-                      }}
-                    >
-                      {msg.content}
-                    </ReactMarkdown>
-                  </div>
-
-                  {msg.role === 'assistant' && !isLoading && (() => {
-                    const hasMedia = !!msg.imageUrl || !!msg.videoUrl
-
-                    return (
-                      <div className={`mt-3 pt-3 flex flex-wrap items-center gap-4 ${isDark ? 'border-t border-white/10' : 'border-t border-slate-400'}`}>
-
-                        {!hasMedia && (
-                          <>
-                            <button
-                              onClick={() => handleSpeak(msg.content, msg.id)}
-                              className={`flex items-center gap-1.5 text-xs transition-colors ${
-                                speakingId === msg.id
-                                  ? 'text-cyan-600 animate-pulse'
-                                  : isDark
-                                    ? 'text-slate-400 hover:text-white'
-                                    : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                              title={speakingId === msg.id ? "Berhenti bicara" : "Bacakan respon"}
-                            >
-                              {speakingId === msg.id ? (
-                                <>
-                                  <StopCircle className="w-3.5 h-3.5" />
-                                  <span>Stop</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Volume2 className="w-3.5 h-3.5" />
-                                  <span>Baca</span>
-                                </>
-                              )}
-                            </button>
-
-                            <button
-                              onClick={() => handleCopyContent(msg.content, msg.id)}
-                              className={`flex items-center gap-1.5 text-xs transition-colors ${
-                                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                              title="Salin respon"
-                            >
-                              {copiedMessageId === msg.id ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-green-400" />
-                                  <span className="text-green-400">Disalin</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5" />
-                                  <span>Salin</span>
-                                </>
-                              )}
-                            </button>
-                          </>
-                        )}
-
-                        {hasMedia && (
-                          <>
-                            {msg.imageUrl && (
-                              <a
-                                href={msg.imageUrl}
-                                download={`reka-image-${msg.id}.png`}
-                                className={`flex items-center gap-1.5 text-xs transition-colors ${
-                                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Download gambar"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Download</span>
-                              </a>
-                            )}
-
-                            {msg.videoUrl && (
-                              <a
-                                href={msg.videoUrl}
-                                download={`reka-video-${msg.id}.mp4`}
-                                className={`flex items-center gap-1.5 text-xs transition-colors ${
-                                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                                }`}
-                                title="Download video"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                                <span>Download</span>
-                              </a>
-                            )}
-                          </>
-                        )}
-
-                        {index === messages.length - 1 && (
-                          <button
-                            onClick={handleRegenerate}
-                            className={`flex items-center gap-1.5 text-xs transition-colors ${
-                              isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                            title="Ulangi respon"
-                          >
-                            <RotateCw className="w-3.5 h-3.5" />
-                            <span>Ulangi</span>
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })()}
-
-                  {msg.role === 'user' && !isLoading && (
-                    <div className={`mt-2 pt-2 flex items-center justify-end gap-4 ${isDark ? 'border-t border-slate-700/50' : 'border-t border-slate-400'}`}>
-                       <button
-                           onClick={() => handleCopyContent(msg.content, msg.id)}
-                           className={`flex items-center gap-1.5 text-xs transition-colors 
-                           ${isDark 
-                              ? 'text-slate-400 hover:text-white' 
-                              : 'text-slate-600 hover:text-slate-900'
-                           }`}
-                           title="Salin pesan"
-                       >
-                           {copiedMessageId === msg.id ? (
-                             <>
-                               <Check className="w-3 h-3 text-green-400" />
-                               <span className="text-green-400">Disalin</span>
-                             </>
-                           ) : (
-                             <>
-                               <Copy className="w-3 h-3" />
-                               <span>Salin</span>
-                             </>
-                           )}
-                       </button>
-
-                       {index === lastUserMessageIndex && (
-                           editingIndex === index ? (
-                             <span className="text-xs text-cyan-400 italic animate-pulse">Sedang mengedit...</span>
-                           ) : (
-                             <button
-                               onClick={() => handleEditMessage(index)}
-                               className={`flex items-center gap-1.5 text-xs transition-colors 
-                               ${isDark 
-                                  ? 'text-slate-400 hover:text-white' 
-                                  : 'text-slate-600 hover:text-slate-900'
-                               }`}
-                               title="Edit pesan"
-                             >
-                               <Pencil className="w-3 h-3" />
-                               <span>Edit</span>
-                             </button>
-                           )
-                       )}
                     </div>
                   )}
 
-                </div>
+                  <div className={`relative max-w-[85%] rounded-2xl p-4 shadow-xl backdrop-blur-sm border 
+                    ${editingIndex === index 
+                        ? isDark 
+                            ? 'ring-2 ring-cyan-500/50 border-cyan-500/30 bg-slate-800' 
+                            : 'ring-2 ring-cyan-600/60 border-cyan-600/60 bg-slate-200' 
+                        : ''
+                    } 
+                    ${msg.role === 'user' 
+                      ? isDark 
+                          ? 'bg-slate-800/80 border-slate-700 text-slate-100 rounded-br-none' 
+                          : 'bg-slate-200 border-slate-400 text-slate-900 rounded-br-none' 
+                      : isDark 
+                          ? 'bg-slate-950/50 border-white/10 text-slate-300 rounded-bl-none prose-headings:text-cyan-200 prose-strong:text-cyan-400' 
+                          : 'bg-white border-slate-400 text-slate-900 rounded-bl-none prose-headings:text-cyan-700 prose-strong:text-cyan-600'
+                    }`}
+                  >
 
-                {msg.role === 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
-                    <User className="w-4 h-4 text-slate-300" />
+                    <div className={`prose max-w-none text-sm md:text-base leading-relaxed ${isDark ? 'prose-invert' : 'prose-slate'}`}>
+                      {msg.imageUrl && (
+                        <img
+                          src={msg.imageUrl}
+                          alt="Generated"
+                          className="mb-3 max-h-80 w-auto rounded-xl border border-white/10 object-cover cursor-zoom-in"
+                          onClick={() =>
+                            setLightbox({
+                              kind: 'image',
+                              src: msg.imageUrl!,
+                              filename: `reka-image-${msg.id}.png`,
+                            })
+                          }
+                        />
+                      )}
+
+                      {msg.videoUrl && (
+                        <div
+                          className="mb-3 w-full rounded-xl border border-white/10 overflow-hidden cursor-zoom-in"
+                          onClick={() =>
+                            setLightbox({
+                              kind: 'video',
+                              src: msg.videoUrl!,
+                              filename: `reka-video-${msg.id}.mp4`,
+                            })
+                          }
+                        >
+                          <video
+                            src={msg.videoUrl}
+                            muted
+                            playsInline
+                            className="w-full block pointer-events-none"
+                          />
+                        </div>
+                      )}
+
+                      {msg.videoOp && !msg.videoUrl && (
+                        <div className="text-xs text-slate-400 mt-2">⏳ Rendering video…</div>
+                      )}
+
+                      {/* ============= SHOW TOOL CALLS ============= */}
+                      {msg.toolCalls && msg.toolCalls.length > 0 && (
+                        <ToolCallDisplay toolCalls={msg.toolCalls} theme={theme} />
+                      )}
+
+                      {/* ============= SHOW TOOL RESULTS ============= */}
+                      {msg.role === 'assistant' && (() => {
+                        const nextMessages = messages.slice(index + 1)
+                        const toolResults = nextMessages.filter(m => 
+                          m.role === 'tool' && 
+                          msg.toolCalls?.some(tc => tc.id === m.toolCallId)
+                        )
+                        
+                        return toolResults.length > 0 ? (
+                          <div className="space-y-2">
+                            {toolResults.map(toolMsg => (
+                              <ToolResultDisplay
+                                key={toolMsg.id}
+                                toolName={toolMsg.toolName || 'unknown'}
+                                result={toolMsg.result}
+                                theme={theme}
+                              />
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
+
+                      {/* ============= SHOW CONTENT ============= */}
+                      {msg.content && (
+                        <ReactMarkdown
+                          rehypePlugins={[rehypeHighlight]}
+                          components={{
+                            pre: ({ children }) => <>{children}</>,
+                            code: ({ className, children, ...props }) => {
+                              const match = /language-(\w+)/.exec(className || '')
+                              const isCodeBlock = !!match
+
+                              if (isCodeBlock) {
+                                return (
+                                  <CodeBlock className={className} {...props}>
+                                    {children}
+                                  </CodeBlock>
+                                )
+                              }
+
+                              return (
+                                <code
+                                  className={`${className} px-1.5 py-0.5 rounded font-mono text-sm ${
+                                    isDark ? 'bg-slate-800 text-cyan-200' : 'bg-slate-300 text-cyan-800'
+                                  }`}
+                                  {...props}
+                                >
+                                  {children}
+                                </code>
+                              )
+                            },
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+
+                    {/* ============= MESSAGE ACTIONS ============= */}
+                    {msg.role === 'assistant' && !isLoading && (() => {
+                      const hasMedia = !!msg.imageUrl || !!msg.videoUrl
+                      const hasTools = !!msg.toolCalls && msg.toolCalls.length > 0
+
+                      return (
+                        <div className={`mt-3 pt-3 flex flex-wrap items-center gap-4 ${isDark ? 'border-t border-white/10' : 'border-t border-slate-400'}`}>
+
+                          {!hasMedia && !hasTools && (
+                            <>
+                              <button
+                                onClick={() => handleSpeak(msg.content, msg.id)}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  speakingId === msg.id
+                                    ? 'text-cyan-600 animate-pulse'
+                                    : isDark
+                                      ? 'text-slate-400 hover:text-white'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title={speakingId === msg.id ? "Berhenti bicara" : "Bacakan respon"}
+                              >
+                                {speakingId === msg.id ? (
+                                  <>
+                                    <StopCircle className="w-3.5 h-3.5" />
+                                    <span>Stop</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Volume2 className="w-3.5 h-3.5" />
+                                    <span>Baca</span>
+                                  </>
+                                )}
+                              </button>
+
+                              <button
+                                onClick={() => handleCopyContent(msg.content, msg.id)}
+                                className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                  isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Salin respon"
+                              >
+                                {copiedMessageId === msg.id ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-green-400" />
+                                    <span className="text-green-400">Disalin</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Salin</span>
+                                  </>
+                                )}
+                              </button>
+                            </>
+                          )}
+
+                          {hasMedia && (
+                            <>
+                              {msg.imageUrl && (
+                                <a
+                                  href={msg.imageUrl}
+                                  download={`reka-image-${msg.id}.png`}
+                                  className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                    isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                  title="Download gambar"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </a>
+                              )}
+
+                              {msg.videoUrl && (
+                                <a
+                                  href={msg.videoUrl}
+                                  download={`reka-video-${msg.id}.mp4`}
+                                  className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                    isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                  title="Download video"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </a>
+                              )}
+                            </>
+                          )}
+
+                          {index === messages.length - 1 && (
+                            <button
+                              onClick={handleRegenerate}
+                              className={`flex items-center gap-1.5 text-xs transition-colors ${
+                                isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                              title="Ulangi respon"
+                            >
+                              <RotateCw className="w-3.5 h-3.5" />
+                              <span>Ulangi</span>
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
+
+                    {msg.role === 'user' && !isLoading && (
+                      <div className={`mt-2 pt-2 flex items-center justify-end gap-4 ${isDark ? 'border-t border-slate-700/50' : 'border-t border-slate-400'}`}>
+                        <button
+                            onClick={() => handleCopyContent(msg.content, msg.id)}
+                            className={`flex items-center gap-1.5 text-xs transition-colors 
+                            ${isDark 
+                                ? 'text-slate-400 hover:text-white' 
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                            title="Salin pesan"
+                        >
+                            {copiedMessageId === msg.id ? (
+                              <>
+                                <Check className="w-3 h-3 text-green-400" />
+                                <span className="text-green-400">Disalin</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>Salin</span>
+                              </>
+                            )}
+                        </button>
+
+                        {index === lastUserMessageIndex && (
+                            editingIndex === index ? (
+                              <span className="text-xs text-cyan-400 italic animate-pulse">Sedang mengedit...</span>
+                            ) : (
+                              <button
+                                onClick={() => handleEditMessage(index)}
+                                className={`flex items-center gap-1.5 text-xs transition-colors 
+                                ${isDark 
+                                    ? 'text-slate-400 hover:text-white' 
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                                title="Edit pesan"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                <span>Edit</span>
+                              </button>
+                            )
+                        )}
+                      </div>
+                    )}
+
                   </div>
-                )}
-              </motion.div>
-            ))}
+
+                  {msg.role === 'user' && (
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex-shrink-0 flex items-center justify-center shadow-lg mt-1">
+                      <User className="w-4 h-4 text-slate-300" />
+                    </div>
+                  )}
+                </motion.div>
+              )
+            })}
           </AnimatePresence>
 
           {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (

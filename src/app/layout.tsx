@@ -6,8 +6,8 @@ import 'highlight.js/styles/github-dark.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'AI Creative Tool - Unlock Your Creativity',
-  description: 'Modern AI tool interface with no-login experience',
+  title: 'Reka AI - Asisten Coding',
+  description: 'Reka AI: Ubah ide menjadi kode. Asisten AI modern dengan kemampuan coding Next.js 16, React 19, dan Tailwind CSS v4, tanpa perlu login.',
 }
 
 export default function RootLayout({
