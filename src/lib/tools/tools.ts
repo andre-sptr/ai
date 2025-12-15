@@ -164,7 +164,18 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
       },
       required: []
     }
-  }
+  },
+  {
+    name: 'search_web',
+    description: 'Mencari informasi terkini atau fakta spesifik di internet (Google Search)',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Kata kunci pencarian (query)' }
+      },
+      required: ['query']
+    }
+  },
 ]
 
 // =============== TOOL EXECUTORS ===============
@@ -381,6 +392,47 @@ export async function executePasswordGenerator(args: { length?: number, use_symb
   return { success: true, password: pass, length: len }
 }
 
+export async function executeSearchWeb(args: { query: string }): Promise<any> {
+  try {
+    const apiKey = process.env.TAVILY_API_KEY
+    if (!apiKey) {
+      return { success: false, error: 'Server Error: TAVILY_API_KEY is missing.' }
+    }
+
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: args.query,
+        search_depth: "basic",
+        include_answer: true, 
+        max_results: 5
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`Tavily API Error: ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    
+    const context = data.results.map((item: any) => 
+      `- [${item.title}](${item.url}): ${item.content}`
+    ).join('\n\n')
+
+    return {
+      success: true,
+      query: args.query,
+      answer: data.answer, 
+      context: context  
+    }
+  } catch (e: any) {
+    console.error("Search Error:", e)
+    return { success: false, error: `Gagal mencari: ${e.message}` }
+  }
+}
+
 // =============== MAIN EXECUTOR ===============
 export async function executeTool(toolName: string, args: any): Promise<any> {
   switch (toolName) {
@@ -396,6 +448,7 @@ export async function executeTool(toolName: string, args: any): Promise<any> {
     case 'generate_colors': return executeColorGenerator(args)
     case 'validate_email': return executeEmailValidator(args)
     case 'generate_password': return executePasswordGenerator(args)
+    case 'search_web': return executeSearchWeb(args)
     
     default:
       return { success: false, error: `Unknown tool: ${toolName}` }

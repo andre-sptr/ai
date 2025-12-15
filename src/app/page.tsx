@@ -364,6 +364,19 @@ const ToolResultDisplay = ({ toolName, result, theme }: {
               </div>
             )}
 
+            {result.answer && (
+              <div className={`p-3 rounded ${isDark ? 'bg-slate-800/50' : 'bg-white'}`}>
+                <div className="text-xs text-slate-500 mb-2 font-semibold flex items-center gap-1">
+                  🔍 Rangkuman Pencarian:
+                </div>
+                <div className="leading-relaxed">{result.answer}</div>
+                
+                <div className="mt-3 pt-2 border-t border-slate-600/20 text-xs text-slate-500">
+                  Sumber: Tavily Search API
+                </div>
+              </div>
+            )}
+
             {result.tasks && (
               <div className={`p-3 rounded ${isDark ? 'bg-slate-800/50' : 'bg-white'}`}>
                 <div className="text-xs text-slate-500 mb-2">
@@ -379,7 +392,8 @@ const ToolResultDisplay = ({ toolName, result, theme }: {
               </div>
             )}
 
-            {!result.formatted && !result.datetime && !result.definition && !result.tasks && (
+            {!result.formatted && !result.datetime &&  !result.definition &&  !result.tasks &&  !result.answer && !result.colors && !result.analysis &&
+             (
               <pre className={`text-xs font-mono overflow-x-auto p-3 rounded ${
                 isDark ? 'bg-slate-800/50' : 'bg-white'
               }`}>
@@ -1038,7 +1052,7 @@ export default function Home() {
                     animate={{ opacity: 1 }}
                     className="block mt-3 text-sm font-medium text-cyan-400 bg-cyan-950/30 border border-cyan-500/20 py-2 px-4 rounded-lg backdrop-blur-md"
                   >
-                    ⚡ <strong className="text-cyan-300">Active Tools:</strong> Calculator, Time, Weather, Currency, Unit Converter, Scraper, Data Analysis, Colors, Email Validator, Password Generator.
+                    ⚡ <strong className="text-cyan-300">Active Tools:</strong> Calculator, Time, Weather, Currency, Unit Converter, Scraper, Data Analysis, Colors, Email Validator, Password Generator, Diagram, Flowchart, Web Search 🌐
                   </motion.span>
                 )}
               </p>

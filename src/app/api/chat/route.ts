@@ -28,6 +28,9 @@ GAYA KOMUNIKASI:
 1. **JANGAN MENEBAK** data real-time, hitungan, atau konten web. WAJIB GUNAKAN TOOL.
 2. **FORMAT JSON:** Outputkan JSON di baris pertama.
 3. **HASIL TOOL ADALAH FAKTA MUTLAK.** Jangan ubah angka/hasil dari tool.
+4. **INTERNET AKSES:**
+  - Jika user bertanya tentang BERITA TERKINI, HARGA PASAR, ACARA HARI INI, atau fakta yang mungkin berubah setelah 2023 -> **WAJIB GUNAKAN TOOL search_web**.
+  - Jangan menjawab "Saya tidak tahu" atau "Data saya hanya sampai 2023" tanpa mencoba mencari dulu.
 
 DAFTAR TOOLS (FORMAT JSON):
 
@@ -43,6 +46,7 @@ DAFTAR TOOLS (FORMAT JSON):
 10. **Warna**: {"tool": "generate_colors", "count": 5}
 11. **Cek Email**: {"tool": "validate_email", "email": "test@example.com"}
 12. **Password**: {"tool": "generate_password", "length": 16, "use_symbols": true}
+13. **Internet Search**: {"tool": "search_web", "query": "Harga emas hari ini Antam"}
 
 CONTOH INTERAKSI YANG BENAR (TIU):
 User: "Jam berapa di London?"
@@ -64,6 +68,9 @@ You: {"tool": "convert_currency", "amount": 100, "from": "USD", "to": "IDR"}
 
 User: "Apa isi web google.com?"
 You: {"tool": "scrape_website", "url": "https://google.com"}
+
+User: "Siapa pemenang Oscar 2025?"
+You: {"tool": "search_web", "query": "Oscar 2025 winners list"}
 
 PANDUAN KODE:
 - Gunakan Tailwind CSS v4 untuk styling.
@@ -93,7 +100,7 @@ PANDUAN KODE:
     \`\`\`
 
 INSTRUKSI:
-Fokus pada request terakhir user. Jika user minta sesuatu yang bisa diselesaikan dengan tool di atas, LANGSUNG panggil toolnya.
+Fokus pada request terakhir user. Jika user minta sesuatu yang bisa diselesaikan dengan tool di atas, LANGSUNG panggil toolnya. Gunakan tool dengan bijak. Prioritaskan data real-time dari search_web untuk pertanyaan non-coding yang butuh fakta aktual.
 `;
 
 const SYSTEM_PROMPT_NO_TOOLS = `
@@ -299,8 +306,28 @@ export async function POST(req: Request) {
             })
           )
 
+          const newHistory = [
+            ...formattedMessages,
+            { 
+              role: 'assistant', 
+              content: responseText
+            },
+            {
+              role: 'user',
+              content: toolResults.map(tr => 
+                `[Tool Result for ${tr.toolName}]: ${JSON.stringify(tr.result)}`
+              ).join('\n\n')
+            }
+          ];
+
+          const secondResponse = await generateText({
+            model: google(selectedModel),
+            messages: newHistory as any,
+            system: SYSTEM_PROMPT,
+          })
+
           return new Response(JSON.stringify({
-            text: cleanText || '🔧 Menggunakan tools...',
+            text: secondResponse.text,
             toolCalls,
             toolResults
           }), {
