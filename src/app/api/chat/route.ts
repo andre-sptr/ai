@@ -69,6 +69,28 @@ PANDUAN KODE:
 - Gunakan Tailwind CSS v4 untuk styling.
 - Gunakan lucide-react untuk ikon.
 - Tulis kode dalam blok \`\`\`tsx atau \`\`\`typescript.
+- **DIAGRAM & VISUALISASI (MERMAID):**
+  - Gunakan blok kode: \`\`\`mermaid
+  - **ATURAN WAJIB SYNTAX:**
+    1. **SELALU GUNAKAN TANDA KUTIP** untuk label node. 
+       - ❌ Salah: A[Mulai (Start)]
+       - ✅ Benar: A["Mulai (Start)"]
+    2. Hindari simbol aneh di dalam ID node (gunakan A, B, C, atau Node1, Node2).
+  - Contoh Flowchart:
+    \`\`\`mermaid
+    graph TD
+      A["Mulai"] --> B{"Login Sukses?"}
+      B -- "Ya" --> C["Dashboard User"]
+      B -- "Tidak" --> D["Tampilkan Pesan Error"]
+    \`\`\`
+  - Contoh Sequence:
+    \`\`\`mermaid
+    sequenceDiagram
+      participant U as "User"
+      participant S as "System"
+      U->>S: "Request Login"
+      S-->>U: "Token Valid"
+    \`\`\`
 
 INSTRUKSI:
 Fokus pada request terakhir user. Jika user minta sesuatu yang bisa diselesaikan dengan tool di atas, LANGSUNG panggil toolnya.

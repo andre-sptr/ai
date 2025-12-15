@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
+import mermaid from 'mermaid'
 
 type Message = {
   id: string;
@@ -130,6 +131,76 @@ const CodeBlock = ({ children, className, ...props }: any) => {
         ) : (
           <PreviewFrame code={codeContent} />
         )}
+      </div>
+    </div>
+  )
+}
+
+const MermaidBlock = ({ 
+  code, 
+  theme, 
+  onExpand 
+}: { 
+  code: string; 
+  theme: 'light' | 'dark';
+  onExpand: (svgContent: string) => void; 
+}) => {
+  const [svg, setSvg] = useState('')
+  const [error, setError] = useState(false)
+  const id = useRef(`mermaid-${Math.random().toString(36).slice(2)}`).current
+
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: theme === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose',
+      fontFamily: 'inherit',
+    })
+
+    const renderChart = async () => {
+      try {
+        const { svg } = await mermaid.render(id, code)
+        setSvg(svg)
+        setError(false)
+      } catch (err) {
+        console.error('Mermaid Error:', err)
+        setError(true)
+      }
+    }
+
+    renderChart()
+  }, [code, theme, id])
+
+  if (error) {
+    return (
+      <div className="p-4 my-4 border border-red-500/50 bg-red-500/10 rounded-lg text-red-400 text-xs font-mono">
+        Gagal merender diagram. Syntax mungkin tidak valid.
+      </div>
+    )
+  }
+
+  if (!svg) return <div className="animate-pulse h-32 bg-slate-800/20 rounded-xl my-4" />
+
+  return (
+    <div 
+      className="relative group my-4 cursor-zoom-in transition-all"
+      onClick={() => onExpand(svg)}
+    >
+      <div className={`p-4 rounded-xl overflow-hidden max-h-[300px] relative ${
+        theme === 'dark' ? 'bg-slate-900/50 border border-white/10' : 'bg-white border border-slate-200'
+      }`}>
+        <div className="flex justify-center" dangerouslySetInnerHTML={{ __html: svg }} />
+        
+        <div className={`absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t ${
+           theme === 'dark' ? 'from-slate-900 via-slate-900/50' : 'from-white via-white/50'
+        } to-transparent pointer-events-none`} />
+      </div>
+
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 backdrop-blur-[1px] rounded-xl">
+        <span className="px-4 py-2 rounded-full bg-slate-900/90 text-white text-xs font-medium border border-white/20 shadow-xl flex items-center gap-2">
+          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+          Klik untuk memperbesar
+        </span>
       </div>
     </div>
   )
@@ -330,6 +401,74 @@ const ToolResultDisplay = ({ toolName, result, theme }: {
   )
 }
 
+const ZoomableMedia = ({ children }: { children: React.ReactNode }) => {
+  const [scale, setScale] = useState(1)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.stopPropagation()
+    const delta = e.deltaY * -0.001
+    const newScale = Math.min(Math.max(0.5, scale + delta), 5)
+    setScale(newScale)
+  }
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y })
+  }
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return
+    e.preventDefault()
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    })
+  }
+
+  const handleMouseUp = () => setIsDragging(false)
+
+  const handleReset = () => {
+    setScale(1)
+    setPosition({ x: 0, y: 0 })
+  }
+
+  return (
+    <div className="relative w-full h-full overflow-hidden flex items-center justify-center bg-[#0d1117]/50 rounded-xl">
+      <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-2 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-lg border border-white/10 shadow-xl">
+        <button onClick={() => setScale(s => Math.min(s + 0.5, 5))} className="p-2 hover:bg-white/10 rounded text-white" title="Zoom In">
+          <ChevronDown className="w-5 h-5 rotate-180" />
+        </button>
+        <button onClick={handleReset} className="p-2 hover:bg-white/10 rounded text-white font-mono text-xs" title="Reset">
+          {Math.round(scale * 100)}%
+        </button>
+        <button onClick={() => setScale(s => Math.max(s - 0.5, 0.5))} className="p-2 hover:bg-white/10 rounded text-white" title="Zoom Out">
+          <ChevronDown className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{
+          transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+          cursor: isDragging ? 'grabbing' : 'grab',
+          transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+        }}
+        className="w-full h-full flex items-center justify-center"
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -349,6 +488,7 @@ export default function Home() {
 
   type LightboxState =
   | { kind: 'image' | 'video'; src: string; filename: string }
+  | { kind: 'mermaid'; content: string; filename: string }
   | null
 
   const [lightbox, setLightbox] = useState<LightboxState>(null)
@@ -1018,9 +1158,26 @@ export default function Home() {
                             pre: ({ children }) => <>{children}</>,
                             code: ({ className, children, ...props }) => {
                               const match = /language-(\w+)/.exec(className || '')
-                              const isCodeBlock = !!match
+                              const language = match ? match[1] : ''
+                              const codeContent = extractCodeText(children).replace(/\n$/, '')
 
-                              if (isCodeBlock) {
+                              if (language === 'mermaid') {
+                                return (
+                                  <MermaidBlock 
+                                    code={codeContent} 
+                                    theme={theme} 
+                                    onExpand={(svgContent) => {
+                                      setLightbox({
+                                        kind: 'mermaid',
+                                        content: svgContent,
+                                        filename: `diagram-${Date.now()}.svg`
+                                      })
+                                    }}
+                                  />
+                                )
+                              }
+
+                              if (language) {
                                 return (
                                   <CodeBlock className={className} {...props}>
                                     {children}
@@ -1333,38 +1490,63 @@ export default function Home() {
               exit={{ scale: 0.96, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="absolute -top-12 right-0 flex items-center gap-2">
-                <a
-                  href={lightbox.src}
-                  download={lightbox.filename}
-                  className="px-3 py-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
-                >
-                  Download
-                </a>
-                <button
-                  onClick={() => setLightbox(null)}
-                  className="px-3 py-2 rounded-lg text-xs border border-white/10 bg-white/5 text-white hover:bg-white/10 transition"
-                >
-                  Tutup (Esc)
-                </button>
+              <div className="flex items-center justify-between mb-4 px-2">
+                <h3 className="text-white font-medium text-sm flex items-center gap-2">
+                  {lightbox.kind === 'mermaid' ? '📊 Diagram View' : 'Media View'}
+                </h3>
+                
+                <div className="flex items-center gap-2">
+                  <a
+                    href={lightbox.kind === 'mermaid' 
+                      ? `data:image/svg+xml;base64,${typeof window !== 'undefined' ? btoa(lightbox.content) : ''}`
+                      : lightbox.src
+                    }
+                    download={lightbox.filename}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all hover:scale-105"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download {lightbox.kind === 'mermaid' ? 'SVG' : 'File'}
+                  </a>
+
+                  <button
+                    onClick={() => setLightbox(null)}
+                    className="p-2 rounded-lg bg-white/10 hover:bg-red-500/20 hover:text-red-400 text-white/70 transition-all"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/30 overflow-hidden flex items-center justify-center">
-                {lightbox.kind === 'image' ? (
-                  <img
-                    src={lightbox.src}
-                    alt="Preview"
-                    className="max-h-[85vh] max-w-[95vw] object-contain"
-                  />
-                ) : (
-                  <video
-                    src={lightbox.src}
-                    controls
-                    autoPlay
-                    playsInline
-                    className="max-h-[85vh] w-full object-contain bg-black"
-                  />
-                )}
+              <div className="flex-1 rounded-2xl border border-white/10 bg-[#0d1117] overflow-hidden flex flex-col relative">
+                <div className="absolute inset-0 bg-grid-white/[0.05] bg-[size:30px_30px] pointer-events-none" />
+
+                <ZoomableMedia>
+                  {lightbox.kind === 'image' && (
+                    <img
+                      src={lightbox.src}
+                      alt="Preview"
+                      className="max-h-none max-w-none object-contain shadow-2xl pointer-events-none select-none"
+                      style={{ maxHeight: '85vh', maxWidth: '90vw' }}
+                    />
+                  )}
+                  
+                  {lightbox.kind === 'video' && (
+                    <video
+                      src={lightbox.src}
+                      controls
+                      autoPlay
+                      className="max-h-[85vh] max-w-[90vw] object-contain bg-black rounded-lg shadow-2xl"
+                      onMouseDown={(e) => e.stopPropagation()} 
+                    />
+                  )}
+
+                  {lightbox.kind === 'mermaid' && (
+                    <div 
+                      className="pointer-events-none select-none p-10"
+                      dangerouslySetInnerHTML={{ __html: lightbox.content }}
+                    />
+                  )}
+                </ZoomableMedia>
               </div>
             </motion.div>
           </motion.div>
