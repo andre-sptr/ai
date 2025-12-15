@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown } from 'lucide-react'
+import { Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown, Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import mermaid from 'mermaid'
@@ -496,6 +496,9 @@ export default function Home() {
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [useTools, setUseTools] = useState(false)
+  const [docContext, setDocContext] = useState<{ name: string; content: string } | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const docInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -718,6 +721,41 @@ export default function Home() {
     }
   }
 
+  const handleDocSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      })
+      
+      const data = await res.json()
+      
+      if (!res.ok) throw new Error(data.error)
+
+      setDocContext({
+        name: data.filename,
+        content: data.text
+      })
+      
+    } catch (err: any) {
+      alert(err.message)
+    } finally {
+      setIsUploading(false)
+      if (docInputRef.current) docInputRef.current.value = ''
+    }
+  }
+
+  const handleRemoveDoc = () => {
+    setDocContext(null)
+  }
+
   const generateResponse = async (currentMessages: Message[]) => {
     setIsLoading(true)
     window.speechSynthesis.cancel()
@@ -850,18 +888,26 @@ export default function Home() {
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
-    if ((!input.trim() && !selectedImage) || isLoading) return
+    if ((!input.trim() && !selectedImage && !docContext) || isLoading || isUploading) return
 
     const userText = input
     const currentImage = selectedImage
+    const currentDoc = docContext
     
     setInput('')
     setSelectedImage(null)
+    setDocContext(null)
+
+    let finalContent = userText
+
+    if (currentDoc) {
+      finalContent = `[KONTEKS DOKUMEN: ${currentDoc.name}]\n${currentDoc.content}\n\n[PERTANYAAN USER]:\n${userText}`
+    }
     
     const newMessage: Message = { 
       id: Date.now().toString(), 
       role: 'user', 
-      content: userText,
+      content: finalContent,
       imageUrl: currentImage || undefined
     }
 
@@ -1063,6 +1109,21 @@ export default function Home() {
             {messages.map((msg, index) => {
               if (msg.role === 'tool') return null
 
+              let displayContent = msg.content
+              let attachedDocName = null
+              
+              if (msg.role === 'user' && displayContent.includes('[KONTEKS DOKUMEN:')) {
+                const nameMatch = displayContent.match(/\[KONTEKS DOKUMEN: (.*?)\]/)
+                if (nameMatch) {
+                  attachedDocName = nameMatch[1]
+                }
+
+                const parts = displayContent.split('[PERTANYAAN USER]:\n')
+                if (parts.length > 1) {
+                  displayContent = parts[1]
+                }
+              }
+
               return (
                 <motion.div
                   key={msg.id}
@@ -1135,6 +1196,17 @@ export default function Home() {
 
                       {msg.videoOp && !msg.videoUrl && (
                         <div className="text-xs text-slate-400 mt-2">⏳ Rendering video…</div>
+                      )}
+
+                      {attachedDocName && (
+                        <div className={`flex items-center gap-2 mb-3 px-3 py-2 rounded-lg text-xs font-medium border w-fit ${
+                          isDark 
+                            ? 'bg-slate-900/50 border-white/10 text-cyan-200' 
+                            : 'bg-slate-50 border-slate-300 text-cyan-700'
+                        }`}>
+                          <Paperclip className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[200px]">{attachedDocName}</span>
+                        </div>
                       )}
 
                       {/* ============= SHOW TOOL CALLS ============= */}
@@ -1212,7 +1284,7 @@ export default function Home() {
                             },
                           }}
                         >
-                          {msg.content}
+                          {displayContent}
                         </ReactMarkdown>
                       )}
                     </div>
@@ -1324,7 +1396,7 @@ export default function Home() {
                     {msg.role === 'user' && !isLoading && (
                       <div className={`mt-2 pt-2 flex items-center justify-end gap-4 ${isDark ? 'border-t border-slate-700/50' : 'border-t border-slate-400'}`}>
                         <button
-                            onClick={() => handleCopyContent(msg.content, msg.id)}
+                            onClick={() => handleCopyContent(displayContent, msg.id)}
                             className={`flex items-center gap-1.5 text-xs transition-colors 
                             ${isDark 
                                 ? 'text-slate-400 hover:text-white' 
@@ -1442,15 +1514,53 @@ export default function Home() {
               </div>
             )}
 
-            <div className="flex items-end">
+            {docContext && (
+              <div className="px-3 pt-3 pb-1">
+                <div className="relative inline-flex items-center gap-2 bg-slate-800/50 border border-cyan-500/30 rounded-lg px-3 py-1.5 pr-8">
+                  <span className="text-xs text-cyan-300 truncate max-w-[200px]">
+                    📄 {docContext.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleRemoveDoc}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1 hover:text-red-400 transition-colors"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 mb-1">
+              <button
+                type="button"
+                onClick={() => docInputRef.current?.click()}
+                className={`p-2 rounded-lg transition-colors ${
+                  isUploading ? 'text-cyan-400 animate-pulse' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800'
+                }`}
+                disabled={isUploading}
+                title="Upload Dokumen (PDF/Text)"
+              >
+                <Paperclip className="w-5 h-5" /> 
+              </button>
+
+              <input 
+                type="file" 
+                ref={docInputRef} 
+                onChange={handleDocSelect}
+                className="hidden" 
+                accept=".pdf,.txt,.md,.json,.js,.ts,.tsx"
+              />
+
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="mb-3 ml-2 p-2 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-all active:scale-95"
                 title="Upload gambar"
               >
                 <ImageIcon className="w-5 h-5" />
               </button>
+
               <input 
                 type="file" 
                 ref={fileInputRef} 
