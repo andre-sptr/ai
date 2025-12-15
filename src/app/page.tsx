@@ -342,7 +342,7 @@ export default function Home() {
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash')
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
-  const [useTools, setUseTools] = useState(true)
+  const [useTools, setUseTools] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -755,15 +755,15 @@ export default function Home() {
   const isDark = theme === 'dark'
 
   return (
-    <main className={`relative h-screen overflow-hidden selection:bg-cyan-500/30 font-sans flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-800'}`}>
+    <main className={`relative h-screen overflow-hidden selection:bg-cyan-500/30 font-sans flex flex-col transition-colors duration-300 ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-200 text-slate-800'}`}>
       
       <div className="absolute inset-0 z-0 pointer-events-none fixed">
         <div className={`absolute inset-0 ${isDark ? 'bg-grid-white' : 'bg-grid-black'} bg-[size:50px_50px]`} />
-        <div className={`absolute inset-0 ${isDark ? 'bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80' : 'bg-gradient-to-t from-slate-100 via-slate-100/50 to-slate-100/80'}`} />
+        <div className={`absolute inset-0 ${isDark ? 'bg-gradient-to-t from-slate-950 via-slate-950/50 to-slate-950/80' : 'bg-gradient-to-t from-slate-200 via-slate-200/50 to-slate-200/80'}`} />
       </div>
 
       <header className={`fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4 py-3 border-b shadow-sm transition-colors duration-300 
-        ${isDark ? 'bg-slate-950/80 backdrop-blur-md border-white/5' : 'bg-slate-100/80 backdrop-blur-md border-slate-200'}`}
+        ${isDark ? 'bg-slate-950/80 backdrop-blur-md border-white/5' : 'bg-slate-200/80 backdrop-blur-md border-slate-300'}`}
       >
         
         <div className="flex items-center gap-3">
@@ -786,14 +786,14 @@ export default function Home() {
                 {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            <label className={`flex items-center gap-2 text-xs cursor-pointer px-3 py-1.5 rounded-full border transition-all ${
+            <label className={`flex items-center gap-1 text-xs cursor-pointer px-3 py-1.5 rounded-full border transition-all ${
               useTools 
                 ? isDark 
                   ? 'bg-cyan-950/30 border-cyan-500/50 text-cyan-400' 
                   : 'bg-cyan-100 border-cyan-500 text-cyan-700'
                 : isDark
-                  ? 'bg-slate-900 border-slate-700 text-slate-400'
-                  : 'bg-slate-200 border-slate-400 text-slate-600'
+                  ? 'bg-slate-900 border-white/10 hover:border-cyan-500/50 text-slate-300'
+                  : 'bg-white border-slate-300 hover:border-cyan-500/50 text-slate-700'
             }`}>
               <input
                 type="checkbox"
@@ -893,9 +893,13 @@ export default function Home() {
               <p className="text-slate-400 text-lg">
                 Mulai percakapan dengan Reka. Ubah ide menjadi kode secara realtime.
                 {useTools && (
-                  <span className="block mt-2 text-sm text-cyan-400">
-                    ⚡ Tools aktif: Calculator, Time, TODO List, Definitions
-                  </span>
+                  <motion.span 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="block mt-3 text-sm font-medium text-cyan-400 bg-cyan-950/30 border border-cyan-500/20 py-2 px-4 rounded-lg backdrop-blur-md"
+                  >
+                    ⚡ <strong className="text-cyan-300">Active Tools:</strong> Calculator, Time, Weather, Currency, Unit Converter, Scraper, Data Analysis, Colors, Email Validator, Password Generator.
+                  </motion.span>
                 )}
               </p>
             </motion.div>
@@ -932,7 +936,7 @@ export default function Home() {
                     ${msg.role === 'user' 
                       ? isDark 
                           ? 'bg-slate-800/80 border-slate-700 text-slate-100 rounded-br-none' 
-                          : 'bg-slate-200 border-slate-400 text-slate-900 rounded-br-none' 
+                          : 'bg-white border-slate-300 text-slate-900 rounded-br-none'
                       : isDark 
                           ? 'bg-slate-950/50 border-white/10 text-slate-300 rounded-bl-none prose-headings:text-cyan-200 prose-strong:text-cyan-400' 
                           : 'bg-white border-slate-400 text-slate-900 rounded-bl-none prose-headings:text-cyan-700 prose-strong:text-cyan-600'
@@ -1212,8 +1216,14 @@ export default function Home() {
                     className="w-7.5 h-7.5 animate-spin"
                   />
                </div>
-               <div className="bg-slate-950/50 border border-white/10 rounded-2xl rounded-bl-none p-4 flex items-center gap-2">
-                 <span className="text-sm text-slate-400">Menunggu respon...</span>
+               <div className={`border rounded-2xl rounded-bl-none p-4 flex items-center gap-2 transition-colors ${
+                 isDark 
+                   ? 'bg-slate-950/50 border-white/10' 
+                   : 'bg-white border-slate-300 shadow-sm'
+               }`}>
+                 <span className={`text-sm ${
+                   isDark ? 'text-slate-400' : 'text-slate-600'
+                 }`}>Menunggu respon...</span>
                </div>
             </motion.div>
           )}

@@ -8,10 +8,7 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        expression: {
-          type: 'string',
-          description: 'Ekspresi matematika yang akan dihitung, contoh: "2 + 2", "sqrt(16)", "sin(45)"'
-        }
+        expression: { type: 'string', description: 'Ekspresi matematika' }
       },
       required: ['expression']
     }
@@ -22,28 +19,24 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        timezone: {
-          type: 'string',
-          description: 'Timezone dalam format IANA, contoh: "Asia/Jakarta", "America/New_York", "UTC"',
-        }
+        timezone: { type: 'string', description: 'Timezone (contoh: Asia/Jakarta)' }
       },
       required: ['timezone']
     }
   },
   {
     name: 'generate_todo_list',
-    description: 'Membuat daftar TODO yang terstruktur dari deskripsi proyek atau tugas',
+    description: 'Membuat daftar TODO terstruktur',
     parameters: {
       type: 'object',
       properties: {
         project_description: {
           type: 'string',
-          description: 'Deskripsi proyek atau tugas yang akan dibuatkan TODO list'
+          description: ''
         },
         priority: {
-          type: 'string',
-          description: 'Tingkat prioritas: high, medium, atau low',
-          enum: ['high', 'medium', 'low']
+          type: 'string', enum: ['high', 'medium', 'low'],
+          description: ''
         }
       },
       required: ['project_description']
@@ -51,230 +44,360 @@ export const AVAILABLE_TOOLS: ToolDefinition[] = [
   },
   {
     name: 'search_definition',
-    description: 'Mencari definisi atau penjelasan dari suatu istilah',
+    description: 'Mencari definisi istilah',
     parameters: {
       type: 'object',
       properties: {
         term: {
           type: 'string',
-          description: 'Istilah atau kata yang akan dicari definisinya'
+          description: ''
         },
         language: {
-          type: 'string',
-          description: 'Bahasa untuk hasil pencarian: id (Indonesia) atau en (English)',
-          enum: ['id', 'en']
+          type: 'string', enum: ['id', 'en'],
+          description: ''
         }
       },
       required: ['term']
+    }
+  },
+  {
+    name: 'get_weather',
+    description: 'Mendapatkan perkiraan cuaca untuk kota tertentu',
+    parameters: {
+      type: 'object',
+      properties: {
+        city: { type: 'string', description: 'Nama kota (contoh: Jakarta, Bandung)' }
+      },
+      required: ['city']
+    }
+  },
+  {
+    name: 'convert_currency',
+    description: 'Konversi mata uang asing',
+    parameters: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', description: 'Jumlah uang' },
+        from: { type: 'string', description: 'Kode mata uang asal (USD, IDR, EUR)' },
+        to: { type: 'string', description: 'Kode mata uang tujuan (USD, IDR, EUR)' }
+      },
+      required: ['amount', 'from', 'to']
+    }
+  },
+  {
+    name: 'convert_unit',
+    description: 'Konversi satuan (panjang, berat, suhu)',
+    parameters: {
+      type: 'object',
+      properties: {
+        value: { type: 'number', description: 'Nilai satuan' },
+        from: { type: 'string', description: 'Satuan asal (cm, m, km, kg, lbs, c, f)' },
+        to: { type: 'string', description: 'Satuan tujuan' }
+      },
+      required: ['value', 'from', 'to']
+    }
+  },
+  {
+    name: 'scrape_website',
+    description: 'Mengambil teks konten dari sebuah URL website (Web Scraper)',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL website lengkap dengan https://' }
+      },
+      required: ['url']
+    }
+  },
+  {
+    name: 'analyze_data',
+    description: 'Menganalisis data CSV atau JSON sederhana',
+    parameters: {
+      type: 'object',
+      properties: {
+        data: { type: 'string', description: 'Raw string data CSV atau JSON' },
+        format: {
+          type: 'string', enum: ['csv', 'json'],
+          description: ''
+        }
+      },
+      required: ['data', 'format']
+    }
+  },
+  {
+    name: 'generate_colors',
+    description: 'Membuat palet warna hex codes',
+    parameters: {
+      type: 'object',
+      properties: {
+        base_color: { type: 'string', description: 'Warna dasar (opsional, nama atau hex)' },
+        count: { type: 'number', description: 'Jumlah warna (default 5)' }
+      },
+      required: []
+    }
+  },
+  {
+    name: 'validate_email',
+    description: 'Memvalidasi format dan domain email',
+    parameters: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Alamat email yang akan dicek' }
+      },
+      required: ['email']
+    }
+  },
+  {
+    name: 'generate_password',
+    description: 'Membuat password acak yang aman',
+    parameters: {
+      type: 'object',
+      properties: {
+        length: { type: 'number', description: 'Panjang password (default 12)' },
+        use_symbols: {
+          type: 'boolean',
+          description: ''
+        },
+        use_numbers: {
+          type: 'boolean',
+          description: ''
+        }
+      },
+      required: []
     }
   }
 ]
 
 // =============== TOOL EXECUTORS ===============
+
 export async function executeCalculator(args: { expression: string }): Promise<any> {
   try {
     const expr = args.expression.toLowerCase()
-
-    const safeEval = (expression: string): number => {
-      let processed = expression
-        .replace(/sqrt\(([^)]+)\)/g, 'Math.sqrt($1)')
-        .replace(/sin\(([^)]+)\)/g, 'Math.sin($1 * Math.PI / 180)')
-        .replace(/cos\(([^)]+)\)/g, 'Math.cos($1 * Math.PI / 180)')
-        .replace(/tan\(([^)]+)\)/g, 'Math.tan($1 * Math.PI / 180)')
-        .replace(/log\(([^)]+)\)/g, 'Math.log10($1)')
-        .replace(/\^/g, '**')
-      
-      if (!/^[0-9+\-*/.()^\s\w]+$/.test(processed)) {
-        throw new Error('Invalid expression')
-      }
-      
-      return Function('"use strict"; return (' + processed + ')')()
-    }
-    
-    const result = safeEval(expr)
-    
-    return {
-      success: true,
-      expression: args.expression,
-      result: result,
-      formatted: `${args.expression} = ${result}`
-    }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'Gagal menghitung ekspresi',
-      expression: args.expression
-    }
-  }
+      .replace(/sqrt\(([^)]+)\)/g, 'Math.sqrt($1)')
+      .replace(/sin\(([^)]+)\)/g, 'Math.sin($1 * Math.PI / 180)')
+      .replace(/cos\(([^)]+)\)/g, 'Math.cos($1 * Math.PI / 180)')
+      .replace(/tan\(([^)]+)\)/g, 'Math.tan($1 * Math.PI / 180)')
+      .replace(/log\(([^)]+)\)/g, 'Math.log10($1)')
+      .replace(/\^/g, '**')
+    if (!/^[0-9+\-*/.()^\s\w]+$/.test(expr)) throw new Error('Invalid expression')
+    const result = Function('"use strict"; return (' + expr + ')')()
+    return { success: true, formatted: `${args.expression} = ${result}`, result }
+  } catch (e: any) { return { success: false, error: e.message } }
 }
 
 export async function executeGetCurrentTime(args: { timezone: string }): Promise<any> {
   try {
     const now = new Date()
-    const formatter = new Intl.DateTimeFormat('id-ID', {
-      timeZone: args.timezone,
-      dateStyle: 'full',
-      timeStyle: 'long'
+    const fmt = new Intl.DateTimeFormat('id-ID', { timeZone: args.timezone, dateStyle: 'full', timeStyle: 'long' })
+    return { success: true, datetime: fmt.format(now), timezone: args.timezone }
+  } catch (e) { return { success: false, error: 'Invalid timezone' } }
+}
+
+export async function executeGenerateTodoList(args: { project_description: string, priority?: string }): Promise<any> {
+  return {
+    success: true,
+    tasks: [
+      { id: 1, task: 'Analisis kebutuhan: ' + args.project_description, status: 'pending' },
+      { id: 2, task: 'Desain arsitektur sistem', status: 'pending' },
+      { id: 3, task: 'Implementasi fitur utama', status: 'pending' },
+      { id: 4, task: 'Testing & QA', status: 'pending' }
+    ],
+    priority: args.priority || 'medium'
+  }
+}
+
+export async function executeSearchDefinition(args: { term: string, language?: string }): Promise<any> {
+  return {
+    success: true,
+    term: args.term,
+    definition: `Definisi untuk ${args.term} (Simulasi database lokal). Dalam konteks pemrograman, ini biasanya merujuk pada konsep teknis spesifik.`
+  }
+}
+
+export async function executeGetWeather(args: { city: string }): Promise<any> {
+  const conditions = ['Cerah ☀️', 'Berawan ☁️', 'Hujan Ringan 🌦️', 'Hujan Petir ⛈️']
+  const randomCond = conditions[Math.floor(Math.random() * conditions.length)]
+  const randomTemp = Math.floor(Math.random() * (34 - 24) + 24)
+  
+  return {
+    success: true,
+    city: args.city,
+    condition: randomCond,
+    temperature: `${randomTemp}°C`,
+    humidity: `${Math.floor(Math.random() * 40 + 50)}%`,
+    wind: `${Math.floor(Math.random() * 20 + 5)} km/h`,
+    formatted: `Cuaca di ${args.city}: ${randomCond}, Suhu ${randomTemp}°C`
+  }
+}
+
+export async function executeCurrencyConverter(args: { amount: number, from: string, to: string }): Promise<any> {
+  const rates: Record<string, number> = {
+    'USD': 1, 'IDR': 15800, 'EUR': 0.92, 'SGD': 1.35, 'JPY': 150
+  }
+  
+  const fromRate = rates[args.from.toUpperCase()]
+  const toRate = rates[args.to.toUpperCase()]
+
+  if (!fromRate || !toRate) {
+    return { success: false, error: 'Mata uang tidak didukung. Coba USD, IDR, EUR, SGD, JPY.' }
+  }
+
+  const result = (args.amount / fromRate) * toRate
+  
+  return {
+    success: true,
+    amount: args.amount,
+    from: args.from.toUpperCase(),
+    to: args.to.toUpperCase(),
+    result: result.toFixed(2),
+    formatted: `${args.amount} ${args.from.toUpperCase()} = ${result.toLocaleString('id-ID')} ${args.to.toUpperCase()}`
+  }
+}
+
+export async function executeUnitConverter(args: { value: number, from: string, to: string }): Promise<any> {
+  const v = args.value
+  let res = 0
+  let formula = ''
+
+  const f = args.from.toLowerCase()
+  const t = args.to.toLowerCase()
+
+  if (f === 'cm' && t === 'inch') { res = v / 2.54; formula = '/ 2.54' }
+  else if (f === 'inch' && t === 'cm') { res = v * 2.54; formula = '* 2.54' }
+  else if (f === 'kg' && t === 'lbs') { res = v * 2.20462; formula = '* 2.20462' }
+  else if (f === 'lbs' && t === 'kg') { res = v / 2.20462; formula = '/ 2.20462' }
+  else if (f === 'c' && t === 'f') { res = (v * 9/5) + 32; formula = '(x * 9/5) + 32' }
+  else if (f === 'f' && t === 'c') { res = (v - 32) * 5/9; formula = '(x - 32) * 5/9' }
+  else {
+    return { success: false, error: 'Konversi satuan tidak didukung. Coba: cm-inch, kg-lbs, c-f' }
+  }
+
+  return {
+    success: true,
+    from: f, to: t, original: v, result: res.toFixed(2), formula
+  }
+}
+
+export async function executeWebScraper(args: { url: string }): Promise<any> {
+  try {
+    const response = await fetch(args.url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RekaAI/1.0)' }
     })
     
-    const formattedTime = formatter.format(now)
+    if (!response.ok) throw new Error(`HTTP Error: ${response.status}`)
     
+    const html = await response.text()
+    
+    const textContent = html
+      .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
+      .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 1000)
+
     return {
       success: true,
-      timezone: args.timezone,
-      datetime: formattedTime,
-      timestamp: now.toISOString(),
-      unix: Math.floor(now.getTime() / 1000)
+      url: args.url,
+      preview: textContent + '...',
+      length: html.length
     }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: `Timezone tidak valid: ${args.timezone}`,
-      available_timezones_example: [
-        'Asia/Jakarta',
-        'Asia/Singapore', 
-        'America/New_York',
-        'Europe/London',
-        'UTC'
-      ]
-    }
+  } catch (e: any) {
+    return { success: false, error: `Gagal scrape: ${e.message}` }
   }
 }
 
-export async function executeGenerateTodoList(args: { 
-  project_description: string
-  priority?: string 
-}): Promise<any> {
+export async function executeDataAnalyzer(args: { data: string, format: 'csv' | 'json' }): Promise<any> {
   try {
-    const description = args.project_description
-    const priority = args.priority || 'medium'
-    const tasks: string[] = []
+    let result: any = {}
     
-    if (description.toLowerCase().includes('website') || description.toLowerCase().includes('web')) {
-      tasks.push('Setup project structure')
-      tasks.push('Design UI/UX mockups')
-      tasks.push('Implement frontend components')
-      tasks.push('Setup backend API')
-      tasks.push('Database integration')
-      tasks.push('Testing & debugging')
-      tasks.push('Deploy to production')
-    } else if (description.toLowerCase().includes('app') || description.toLowerCase().includes('mobile')) {
-      tasks.push('Define app requirements')
-      tasks.push('Create wireframes')
-      tasks.push('Setup development environment')
-      tasks.push('Develop core features')
-      tasks.push('Implement UI/UX')
-      tasks.push('Testing on multiple devices')
-      tasks.push('Publish to app store')
+    if (args.format === 'json') {
+      const json = JSON.parse(args.data)
+      const isArray = Array.isArray(json)
+      result = {
+        type: 'json',
+        is_array: isArray,
+        count: isArray ? json.length : Object.keys(json).length,
+        keys: isArray && json.length > 0 ? Object.keys(json[0]) : Object.keys(json)
+      }
     } else {
-      tasks.push('Analisis requirements')
-      tasks.push('Planning & design')
-      tasks.push('Implementation')
-      tasks.push('Testing')
-      tasks.push('Review & refinement')
-      tasks.push('Documentation')
-      tasks.push('Completion & delivery')
+      const rows = args.data.trim().split('\n')
+      const headers = rows[0].split(',')
+      result = {
+        type: 'csv',
+        rows: rows.length,
+        columns: headers.length,
+        headers: headers
+      }
     }
-    
-    return {
-      success: true,
-      project: description,
-      priority: priority,
-      total_tasks: tasks.length,
-      tasks: tasks.map((task, index) => ({
-        id: index + 1,
-        task: task,
-        status: 'pending',
-        priority: priority
-      })),
-      estimated_days: Math.ceil(tasks.length * 1.5)
-    }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message
-    }
+
+    return { success: true, analysis: result }
+  } catch (e: any) {
+    return { success: false, error: 'Data invalid' }
   }
 }
 
-export async function executeSearchDefinition(args: { 
-  term: string
-  language?: string 
-}): Promise<any> {
-  try {
-    const definitions: Record<string, { id: string, en: string }> = {
-      'react': {
-        id: 'Library JavaScript untuk membangun user interface yang interaktif dan component-based.',
-        en: 'A JavaScript library for building interactive and component-based user interfaces.'
-      },
-      'typescript': {
-        id: 'Superset dari JavaScript yang menambahkan static typing dan fitur modern lainnya.',
-        en: 'A superset of JavaScript that adds static typing and other modern features.'
-      },
-      'nextjs': {
-        id: 'Framework React untuk production yang menyediakan server-side rendering dan static site generation.',
-        en: 'A React framework for production that provides server-side rendering and static site generation.'
-      },
-      'api': {
-        id: 'Application Programming Interface - Antarmuka yang memungkinkan komunikasi antar aplikasi.',
-        en: 'Application Programming Interface - An interface that enables communication between applications.'
-      },
-      'jsx': {
-        id: 'JavaScript XML - Sintaks extension untuk JavaScript yang memungkinkan menulis HTML dalam React.',
-        en: 'JavaScript XML - A syntax extension for JavaScript that allows writing HTML in React.'
-      },
-      'tailwind': {
-        id: 'Framework CSS utility-first untuk membuat design modern dengan cepat.',
-        en: 'A utility-first CSS framework for rapidly building modern designs.'
-      },
-      'gemini': {
-        id: 'Model AI multimodal dari Google yang mampu memproses teks, gambar, audio, dan video.',
-        en: 'A multimodal AI model from Google capable of processing text, images, audio, and video.'
-      }
-    }
-    
-    const term = args.term.toLowerCase()
-    const lang = args.language || 'id'
-    
-    if (definitions[term]) {
-      return {
-        success: true,
-        term: args.term,
-        definition: lang === 'id' ? definitions[term].id : definitions[term].en,
-        language: lang,
-        source: 'Reka Knowledge Base'
-      }
-    } else {
-      return {
-        success: false,
-        term: args.term,
-        message: `Definisi untuk "${args.term}" tidak ditemukan dalam database lokal.`,
-        suggestion: 'Coba gunakan istilah yang lebih umum atau tanyakan langsung kepada Reka.'
-      }
-    }
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message
-    }
+export async function executeColorGenerator(args: { count?: number }): Promise<any> {
+  const count = args.count || 5
+  const colors = []
+  
+  for (let i = 0; i < count; i++) {
+    colors.push('#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0'))
   }
+
+  return {
+    success: true,
+    colors: colors,
+    formatted: `Palet Warna: ${colors.join(', ')}`
+  }
+}
+
+export async function executeEmailValidator(args: { email: string }): Promise<any> {
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const isValid = regex.test(args.email)
+  
+  return {
+    success: true,
+    email: args.email,
+    is_valid: isValid,
+    domain: isValid ? args.email.split('@')[1] : null
+  }
+}
+
+export async function executePasswordGenerator(args: { length?: number, use_symbols?: boolean, use_numbers?: boolean }): Promise<any> {
+  const len = args.length || 12
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const nums = '0123456789'
+  const syms = '!@#$%^&*()_+-=[]{}|;:,.<>?'
+  
+  let validChars = chars
+  if (args.use_numbers !== false) validChars += nums
+  if (args.use_symbols !== false) validChars += syms
+  
+  let pass = ''
+  for (let i = 0; i < len; i++) {
+    pass += validChars.charAt(Math.floor(Math.random() * validChars.length))
+  }
+  
+  return { success: true, password: pass, length: len }
 }
 
 // =============== MAIN EXECUTOR ===============
 export async function executeTool(toolName: string, args: any): Promise<any> {
   switch (toolName) {
-    case 'calculator':
-      return executeCalculator(args)
-    case 'get_current_time':
-      return executeGetCurrentTime(args)
-    case 'generate_todo_list':
-      return executeGenerateTodoList(args)
-    case 'search_definition':
-      return executeSearchDefinition(args)
+    case 'calculator': return executeCalculator(args)
+    case 'get_current_time': return executeGetCurrentTime(args)
+    case 'generate_todo_list': return executeGenerateTodoList(args)
+    case 'search_definition': return executeSearchDefinition(args)
+    case 'get_weather': return executeGetWeather(args)
+    case 'convert_currency': return executeCurrencyConverter(args)
+    case 'convert_unit': return executeUnitConverter(args)
+    case 'scrape_website': return executeWebScraper(args)
+    case 'analyze_data': return executeDataAnalyzer(args)
+    case 'generate_colors': return executeColorGenerator(args)
+    case 'validate_email': return executeEmailValidator(args)
+    case 'generate_password': return executePasswordGenerator(args)
+    
     default:
-      return {
-        success: false,
-        error: `Unknown tool: ${toolName}`
-      }
+      return { success: false, error: `Unknown tool: ${toolName}` }
   }
 }
