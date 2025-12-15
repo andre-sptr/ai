@@ -2,7 +2,8 @@
 
 import { useRef, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown, Paperclip } from 'lucide-react'
+import { Mic, MicOff, Download, Sun, Moon, Sparkles, Zap, ArrowRight, User, Trash2, Check, Copy, RotateCw, Image as ImageIcon, X, Pencil, XCircle, Volume2, StopCircle, ChevronDown, Paperclip } from 'lucide-react'
+import { useSpeechRecognition } from '@/hooks/useSpeechRecognition'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import mermaid from 'mermaid'
@@ -498,6 +499,7 @@ export default function Home() {
   const [useTools, setUseTools] = useState(false)
   const [docContext, setDocContext] = useState<{ name: string; content: string } | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const { isListening, transcript, startListening, stopListening, setTranscript } = useSpeechRecognition()
   const docInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -527,14 +529,21 @@ export default function Home() {
     }
   }, [lightbox])
 
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => (prev ? `${prev} ${transcript}` : transcript))
+      setTranscript('')
+    }
+  }, [transcript, setTranscript])
+
   const models = [
     { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: 'Reasoning & Agentic Paling Canggih' },
     { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro (Image)', desc: 'Generasi Gambar & Teks High-Fidelity' },
 
     { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Reasoning Kompleks & Coding' },
     { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Cepat & Cerdas (Recommended)' },
-    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash (Image)', desc: 'Pembuatan & Edit Aset Visual' },
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', desc: 'Ringan & Hemat Biaya' },
+    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash (Image)', desc: 'Pembuatan & Edit Aset Visual' },
 
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Versi Stabil Sebelumnya' },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', desc: 'Efisien untuk Tugas Sederhana' },
@@ -542,9 +551,9 @@ export default function Home() {
     { id: 'gemini-flash-latest', name: 'Gemini Flash', desc: 'Versi Flash Paling Baru' },
     { id: 'gemini-flash-lite-latest', name: 'Gemini Flash-Lite', desc: 'Versi Lite Paling Baru' },
 
+    { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4.0 Fast (Image)', desc: 'Generasi Gambar Cepat' },
     { id: 'imagen-4.0-generate-001', name: 'Imagen 4.0 (Image)', desc: 'Generasi Gambar Kualitas Tinggi' },
     { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4.0 Ultra (Image)', desc: 'Detail Gambar Ultra Realistis' },
-    { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4.0 Fast (Image)', desc: 'Generasi Gambar Cepat' },
     { id: 'veo-2.0-generate-001', name: 'Veo 2.0 (Video)', desc: 'Generasi Video Sinematik' },
 
     { id: 'gemini-robotics-er-1.5-preview', name: 'Gemini Robotics 1.5', desc: 'Model Eksperimental Robotika' },
@@ -1531,7 +1540,7 @@ export default function Home() {
               </div>
             )}
 
-            <div className="flex items-center gap-1 mb-1">
+            <div className="flex items-center gap-0 mb-1">
               <button
                 type="button"
                 onClick={() => docInputRef.current?.click()}
@@ -1568,6 +1577,19 @@ export default function Home() {
                 className="hidden" 
                 accept="image/*"
               />
+
+              <button
+                type="button"
+                onClick={isListening ? stopListening : startListening}
+                className={`p-2 rounded-lg transition-all active:scale-95 ${
+                  isListening 
+                    ? 'bg-red-500/20 text-red-400 animate-pulse border border-red-500/30' // Style saat merekam
+                    : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-800' // Style normal
+                }`}
+                title={isListening ? "Klik untuk berhenti" : "Klik untuk bicara (Bahasa Indonesia)"}
+              >
+                {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+              </button>
 
               <textarea
                 ref={textareaRef}
